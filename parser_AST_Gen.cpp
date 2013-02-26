@@ -252,11 +252,11 @@ Token CompilingContext::ScanForToken(const char* str, Token::Type& tp, int& char
 			if (*curIt == 'f' || *curIt == 'F')
 				curIt++;
 		}
-		charParsed = int(curIt - pFirstChar);
-
+		
 		ret = Token(pFirstCh, curIt - pFirstCh, isFirstCharNumber ? Token::kConstInt : Token::kIdentifier);
 	}
 
+	charParsed = int(curIt - pFirstChar);
 	return ret;
 }
 
