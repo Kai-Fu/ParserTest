@@ -3,10 +3,13 @@
 
 namespace SC {
 
-Token::Token(const char* p, int num, Type tp)
+Token Token::sInvalid = Token(NULL, 0, -1, Token::kUnknown);
+
+Token::Token(const char* p, int num, int line, Type tp)
 {
 	mpData = p;
 	mNumOfChar = num;
+	mLOC = line;
 	mType = tp;
 }
 
@@ -57,6 +60,11 @@ int Token::GetBinaryOpLevel() const
 	return 0;
 }
 
+bool Token::IsValid() const
+{
+	return (mNumOfChar > 0 && mpData != NULL);
+}
+
 bool Token::IsEqual(const char* dest) const
 {
 	size_t len = strlen(dest);
@@ -79,6 +87,14 @@ bool Token::IsEqual(const Token& dest) const
 			return false;
 	}
 	return true;
+}
+
+void Token::ToAnsiString(char* dest) const
+{
+	int i = 0;
+	for (; i < mNumOfChar; ++i)
+		dest[i] = mpData[i];
+	dest[i] = '\0';
 }
 
 static bool _isAlpha(char ch)
@@ -106,127 +122,122 @@ static bool _isFirstN_Equal(const char* test_str, const char* dest)
 	return true;
 }
 
-Token CompilingContext::ScanForToken(const char* str, Token::Type& tp, int& charParsed, int& newLineParsed, std::string& errorMsg)
+Token CompilingContext::ScanForToken(std::string& errorMsg)
 {
-	newLineParsed = 0;
-	tp = Token::kUnknown;
-	const char* pFirstChar = str;
-	const char* curIt = str;
-
 	// Eat the white spaces and new line characters.
 	//
 	bool isNewLineChar = false;
-	while (*curIt == ' ' || (isNewLineChar = (*curIt == '\n'))) {
+	while (*mCurParsingPtr == ' ' || (isNewLineChar = (*mCurParsingPtr == '\n'))) {
 		if (isNewLineChar)
-			++newLineParsed;
-		++curIt;
+			++mCurParsingLOC;
+		++mCurParsingPtr;
 	}
 
 	// Skip the comments, e.g. //... and /* ... */
 	//
-	if (*curIt == '/') {
+	if (*mCurParsingPtr == '/') {
 
-		if (*(curIt + 1) == '*') {
-			curIt += 2;
+		if (*(mCurParsingPtr + 1) == '*') {
+			mCurParsingPtr += 2;
 			// Seek for the end of the comments(*/)
 			bool isLastAsterisk = false;
-			while (*curIt != '\0') {
-				if (isLastAsterisk && *curIt == '/')
+			while (*mCurParsingPtr != '\0') {
+				if (isLastAsterisk && *mCurParsingPtr == '/')
 					break;
-				if (*curIt != '*') 
+				if (*mCurParsingPtr != '*') 
 					isLastAsterisk = true;
 			}
-			if (*curIt == '\0') {
+			if (*mCurParsingPtr == '\0') {
 				errorMsg = "Comments not ended - unexpected end of file.";
-				return Token(NULL, 0, Token::kUnknown);
+				return Token::sInvalid;
 			}
 		}
-		else if (*(curIt + 1) == '/') {
-			curIt += 2;
+		else if (*(mCurParsingPtr + 1) == '/') {
+			mCurParsingPtr += 2;
 			// Go to the end of the line
-			while (*curIt != '\0' && *curIt != '\n') 
-				++curIt;
+			while (*mCurParsingPtr != '\0' && *mCurParsingPtr != '\n') 
+				++mCurParsingPtr;
 
-			if (*curIt == '\n')
-				newLineParsed++;
+			if (*mCurParsingPtr == '\n')
+				mCurParsingLOC++;
 		}
 	}
 
-	Token ret(NULL, 0, Token::kUnknown);
+	Token ret = Token::sInvalid;
 	// Now it is expecting a token.
 	//
-	if (_isFirstN_Equal(curIt, "++") ||
-		_isFirstN_Equal(curIt, "--") ||
-		_isFirstN_Equal(curIt, "||") ||
-		_isFirstN_Equal(curIt, "&&")) {
+	if (_isFirstN_Equal(mCurParsingPtr, "++") ||
+		_isFirstN_Equal(mCurParsingPtr, "--") ||
+		_isFirstN_Equal(mCurParsingPtr, "||") ||
+		_isFirstN_Equal(mCurParsingPtr, "&&")) {
 
-		ret = Token(curIt, 2, Token::kBinaryOp);
-		curIt += 2;
+		ret = Token(mCurParsingPtr, 2, mCurParsingLOC, Token::kBinaryOp);
+		mCurParsingPtr += 2;
 	}
-	else if (_isFirstN_Equal(curIt, "+") ||
-			 _isFirstN_Equal(curIt, "-") ||
-			 _isFirstN_Equal(curIt, "*") ||
-			 _isFirstN_Equal(curIt, "/") ||
-			 _isFirstN_Equal(curIt, "|") ||
-			 _isFirstN_Equal(curIt, "&")) {
+	else if (_isFirstN_Equal(mCurParsingPtr, "+") ||
+			 _isFirstN_Equal(mCurParsingPtr, "-") ||
+			 _isFirstN_Equal(mCurParsingPtr, "*") ||
+			 _isFirstN_Equal(mCurParsingPtr, "/") ||
+			 _isFirstN_Equal(mCurParsingPtr, "|") ||
+			 _isFirstN_Equal(mCurParsingPtr, "&")) {
 
-		ret = Token(curIt, 1, Token::kBinaryOp);
-		++curIt;
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kBinaryOp);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '{') {
-		ret = Token(curIt, 1, Token::kOpenCurly);
-		++curIt;
+	else if(*mCurParsingPtr == '{') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kOpenCurly);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '}') {
-		ret = Token(curIt, 1, Token::kCloseCurly);
-		++curIt;
+	else if(*mCurParsingPtr == '}') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kCloseCurly);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '[') {
-		ret = Token(curIt, 1, Token::kOpenBraket);
-		++curIt;
+	else if(*mCurParsingPtr == '[') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kOpenBraket);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == ']') {
-		ret = Token(curIt, 1, Token::kCloseBraket);
-		++curIt;
+	else if(*mCurParsingPtr == ']') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kCloseBraket);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '(') {
-		ret = Token(curIt, 1, Token::kOpenParenthesis);
-		++curIt;
+	else if(*mCurParsingPtr == '(') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kOpenParenthesis);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == ')') {
-		ret = Token(curIt, 1, Token::kCloseParenthesis);
-		++curIt;
+	else if(*mCurParsingPtr == ')') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kCloseParenthesis);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == ',') {
-		ret = Token(curIt, 1, Token::kComma);
-		++curIt;
+	else if(*mCurParsingPtr == ',') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kComma);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == ';') {
-		ret = Token(curIt, 1, Token::kSemiColon);
-		++curIt;
+	else if(*mCurParsingPtr == ';') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kSemiColon);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '.') {
-		ret = Token(curIt, 1, Token::kPeriod);
-		++curIt;
+	else if(*mCurParsingPtr == '.') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kPeriod);
+		++mCurParsingPtr;
 	}
-	else if(*curIt == '!') {
-		ret = Token(curIt, 1, Token::kBang);
-		++curIt;
+	else if(*mCurParsingPtr == '!') {
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kBang);
+		++mCurParsingPtr;
 	}
 	else {
 		// Now handling for constants for identifiers
-		bool isFirstCharNumber = _isNumber(*curIt);
-		if (!isFirstCharNumber && !_isAlpha(*curIt)) {
-			// Reject any unrecoginzed character
-			return Token(NULL, 0, Token::kUnknown);
+		bool isFirstCharNumber = _isNumber(*mCurParsingPtr);
+		if (!isFirstCharNumber && (!_isAlpha(*mCurParsingPtr) || *mCurParsingPtr != '_')) {
+			// Unrecoginzed character
+			return Token(mCurParsingPtr++, 1, mCurParsingLOC, Token::kUnknown);
 		}
 
-		const char* pFirstCh = curIt;
+		const char* pFirstCh = mCurParsingPtr;
 		int idLen = 0;
-		while (	*curIt != '\0' &&
-				(_isAlpha(*curIt) ||
-				_isNumber(*curIt) ||
-				*curIt == '_')) {
+		while (	*mCurParsingPtr != '\0' &&
+				(_isAlpha(*mCurParsingPtr) ||
+				_isNumber(*mCurParsingPtr) ||
+				*mCurParsingPtr == '_')) {
 			idLen++;
 		}
 		bool hasNonNumber = false;
@@ -238,43 +249,127 @@ Token CompilingContext::ScanForToken(const char* str, Token::Type& tp, int& char
 		if (isFirstCharNumber && hasNonNumber) {
 			errorMsg = "Invalid identifier - ";
 			errorMsg.append(pFirstCh, idLen);
-			return Token(NULL, 0, Token::kUnknown);
+			return Token(NULL, 0, mCurParsingLOC, Token::kUnknown);
 		}
 
 		if (isFirstCharNumber) {
 			// check for decimal point, e.g. 123.456f
-			if (*curIt == '.') {
-				curIt++;
-				while (_isNumber(*curIt)) 
-					curIt++;
+			if (*mCurParsingPtr == '.') {
+				mCurParsingPtr++;
+				while (_isNumber(*mCurParsingPtr)) 
+					mCurParsingPtr++;
 			}
 
-			if (*curIt == 'f' || *curIt == 'F')
-				curIt++;
+			if (*mCurParsingPtr == 'f' || *mCurParsingPtr == 'F')
+				mCurParsingPtr++;
 		}
 		
-		ret = Token(pFirstCh, curIt - pFirstCh, isFirstCharNumber ? Token::kConstInt : Token::kIdentifier);
+		ret = Token(pFirstCh, mCurParsingPtr - pFirstCh, mCurParsingLOC, isFirstCharNumber ? Token::kConstInt : Token::kIdentifier);
 	}
 
-	charParsed = int(curIt - pFirstChar);
 	return ret;
 }
 
 CompilingContext::CompilingContext(const char* content)
 {
-	mCurContentPtr = content;
+	mContentPtr = content;
+	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 1;
 	mIsInFuncBody = false;
 }
 
 Token CompilingContext::GetNextToken()
 {
-
+	Token ret = PeekNextToken(0);
+	if (ret.IsValid()) {
+		mBufferedToken.erase(mBufferedToken.begin());
+	}
+	return ret;
 }
 
 Token CompilingContext::PeekNextToken(int next_i)
 {
+	int charParsed = 0;
+	int lineParsed = 0;
 
+	int tokenNeeded = 0;
+	if ((int)mBufferedToken.size() <= next_i) 
+		tokenNeeded = next_i -  mBufferedToken.size() + 1;
+	
+	for (int i = 0; i < tokenNeeded; ++i) {
+		std::string errMsg;
+		Token ret = ScanForToken(errMsg);
+
+		if (ret.IsValid()) {
+			mBufferedToken.push_back(ret);
+		}
+		else {
+			mErrorMessages.push_back(errMsg);
+			break;
+		}
+	}
+
+	if ((int)mBufferedToken.size() > next_i) {
+		std::list<Token>::iterator it = mBufferedToken.begin();
+		int itCnt = next_i;
+		while (itCnt-- > 0) ++it;
+		return *it;
+	}
+	else 
+		return Token::sInvalid;
+}
+
+static std::hash_map<std::string, VarType> s_BuiltInTypes;
+static std::hash_map<std::string, KeyWord> s_KeyWords;
+
+void Initialize_AST_Gen()
+{
+	s_BuiltInTypes["float"] = kFloat;
+	s_BuiltInTypes["float2"] = kFloat2;
+	s_BuiltInTypes["float3"] = kFloat3;
+	s_BuiltInTypes["float4"] = kFloat4;
+
+	s_BuiltInTypes["int"] = kInt;
+	s_BuiltInTypes["int2"] = kInt2;
+	s_BuiltInTypes["int3"] = kInt3;
+	s_BuiltInTypes["int4"] = kInt4;
+
+	s_KeyWords["struct"] = kStructDef;
+	s_KeyWords["if"] = kIf;
+	s_KeyWords["else"] = kElse;
+	s_KeyWords["for"] = kFor;
+}
+
+void Finish_AST_Gen()
+{
+	s_BuiltInTypes.clear();
+	s_KeyWords.clear();
+}
+
+bool IsBuiltInType(const Token& token, VarType& out_type)
+{
+	char tempString[MAX_TOKEN_LENGTH];
+	token.ToAnsiString(tempString);
+	std::hash_map<std::string, VarType>::iterator it = s_BuiltInTypes.find(tempString);
+	if (it != s_BuiltInTypes.end()) {
+		out_type = it->second;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool IsKeyWord(const Token& token, KeyWord& out_key)
+{
+	char tempString[MAX_TOKEN_LENGTH];
+	token.ToAnsiString(tempString);
+	std::hash_map<std::string, KeyWord>::iterator it = s_KeyWords.find(tempString);
+	if (it != s_KeyWords.end()) {
+		out_key = it->second;
+		return true;
+	}
+	else
+		return false;
 }
 
 } // namespace SC
