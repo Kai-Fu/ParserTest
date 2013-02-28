@@ -4,6 +4,7 @@
 namespace SC {
 
 Token Token::sInvalid = Token(NULL, 0, -1, Token::kUnknown);
+std::list<CodeDomain*> CodeDomain::sInstances;
 
 Token::Token(const char* p, int num, int line, Type tp)
 {
@@ -370,6 +371,14 @@ bool IsKeyWord(const Token& token, KeyWord& out_key)
 	}
 	else
 		return false;
+}
+
+void CodeDomain::ClearInstances()
+{
+	std::list<CodeDomain*>::iterator it = sInstances.begin();
+	for (; it != sInstances.end(); ++it)
+		delete *it;
+	sInstances.clear();
 }
 
 } // namespace SC

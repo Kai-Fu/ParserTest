@@ -159,13 +159,33 @@ namespace SC {
 
 		std::vector<Expression*> mExpressions;
 
+		static std::list<CodeDomain*> sInstances;
 	public:
 		CodeDomain();
 		virtual ~CodeDomain();
 
+		static void ClearInstances();
+
 		bool IsTypeDefined(const std::string& typeName);
 		bool IsVariableDefined(bool bThisDomain);
 	};
+
+	class FunctionDomain : public CodeDomain
+	{
+	private:
+		Token mReturnType;
+		Token mFuncName;
+		std::vector<Token> mArgments;
+	};
+
+	class RootDomain : public CodeDomain
+	{
+	private:
+		std::vector<FunctionDomain*> mFunctions;
+		std::hash_map<std::string, CodeDomain*> mVariableGroups;
+	};
+
+
 
 	class CompilingContext
 	{
