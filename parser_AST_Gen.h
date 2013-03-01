@@ -32,8 +32,8 @@ namespace SC {
 
 	void Initialize_AST_Gen();
 	void Finish_AST_Gen();
-	bool IsBuiltInType(const Token& token, VarType& out_type);
-	bool IsKeyWord(const Token& token, KeyWord& out_key);
+	bool IsBuiltInType(const Token& token, VarType* out_type = NULL);
+	bool IsKeyWord(const Token& token, KeyWord* out_key = NULL);
 
 	class Token
 	{
@@ -69,11 +69,13 @@ namespace SC {
 
 		double GetConstValue() const;
 		int GetBinaryOpLevel() const;
+		Type GetType() const;
 
 		bool IsValid() const;
 		bool IsEqual(const char* dest) const;
 		bool IsEqual(const Token& dest) const;
 		void ToAnsiString(char* dest) const;
+		std::string ToStdString() const;
 	};
 	
 	class DataBlock
@@ -135,6 +137,9 @@ namespace SC {
 		std::string mStructName;
 		std::vector<Element> mElements;
 	public:
+		Exp_StructDef(std::string name);
+		virtual ~Exp_StructDef();
+
 		void AddFloat();
 		void AddFloat2();
 		void AddFloat3();
@@ -143,9 +148,10 @@ namespace SC {
 		void AddInt2();
 		void AddInt3();
 		void AddInt4();
-		void AddStruct(const Exp_StructDef& subStruct);
+		void AddStruct(const Exp_StructDef* subStruct);
 
 		int GetStructSize() const;
+		int GetElementCount() const;
 		VarType GetElementType(int idx) const;
 	};
 
@@ -154,7 +160,7 @@ namespace SC {
 	private:
 		CodeDomain* mpParentDomain;
 
-		std::hash_map<std::string, Exp_StructDef> mDefinedStructures;
+		std::hash_map<std::string, Exp_StructDef*> mDefinedStructures;
 		std::hash_map<std::string, Token> mDefinedVariables;
 
 		std::vector<Expression*> mExpressions;
@@ -198,15 +204,27 @@ namespace SC {
 		std::string mCurFuncName;
 
 		std::list<Token> mBufferedToken;
-		std::list<std::string> mErrorMessages;
+		std::list<std::pair<Token, std::string> > mErrorMessages;
 
+		RootDomain mRootCodeDomain;
 
+	private:
+		void AddErrorMessage(const Token& token, const std::string& str);
 	public:
 		CompilingContext(const char* content);
 
 
 		Token GetNextToken();
 		Token PeekNextToken(int next_i);
+
+
+		bool IsVarDefinePartten();
+		Exp_VarDef* ParseVarDefine();
+
+		bool IsStructDefinePartten();
+		Exp_StructDef* ParseStructDefine();
+
+
 
 
 	private:

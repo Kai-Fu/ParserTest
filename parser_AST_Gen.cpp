@@ -1,5 +1,6 @@
 #include "parser_AST_Gen.h"
 #include <stdio.h>
+#include <assert.h>
 
 namespace SC {
 
@@ -61,6 +62,11 @@ int Token::GetBinaryOpLevel() const
 	return 0;
 }
 
+Token::Type Token::GetType() const
+{
+
+}
+
 bool Token::IsValid() const
 {
 	return (mNumOfChar > 0 && mpData != NULL);
@@ -96,6 +102,13 @@ void Token::ToAnsiString(char* dest) const
 	for (; i < mNumOfChar; ++i)
 		dest[i] = mpData[i];
 	dest[i] = '\0';
+}
+
+std::string Token::ToStdString() const
+{
+	char tempString[MAX_TOKEN_LENGTH + 1];
+	ToAnsiString(tempString);
+	return std::string(tempString);
 }
 
 static bool _isAlpha(char ch)
@@ -305,7 +318,7 @@ Token CompilingContext::PeekNextToken(int next_i)
 			mBufferedToken.push_back(ret);
 		}
 		else {
-			mErrorMessages.push_back(errMsg);
+			AddErrorMessage(Token(NULL, 0, mCurParsingLOC, Token::kUnknown), errMsg);
 			break;
 		}
 	}
@@ -347,26 +360,26 @@ void Finish_AST_Gen()
 	s_KeyWords.clear();
 }
 
-bool IsBuiltInType(const Token& token, VarType& out_type)
+bool IsBuiltInType(const Token& token, VarType* out_type)
 {
 	char tempString[MAX_TOKEN_LENGTH];
 	token.ToAnsiString(tempString);
 	std::hash_map<std::string, VarType>::iterator it = s_BuiltInTypes.find(tempString);
 	if (it != s_BuiltInTypes.end()) {
-		out_type = it->second;
+		if (out_type) *out_type = it->second;
 		return true;
 	}
 	else
 		return false;
 }
 
-bool IsKeyWord(const Token& token, KeyWord& out_key)
+bool IsKeyWord(const Token& token, KeyWord* out_key)
 {
 	char tempString[MAX_TOKEN_LENGTH];
 	token.ToAnsiString(tempString);
 	std::hash_map<std::string, KeyWord>::iterator it = s_KeyWords.find(tempString);
 	if (it != s_KeyWords.end()) {
-		out_key = it->second;
+		if (out_key) *out_key = it->second;
 		return true;
 	}
 	else
@@ -379,6 +392,239 @@ void CodeDomain::ClearInstances()
 	for (; it != sInstances.end(); ++it)
 		delete *it;
 	sInstances.clear();
+}
+
+void DataBlock::AddFloat(Float f)
+{
+	unsigned char* pData = (unsigned char*)&f;
+	for (int i = 0; i < sizeof(Float); ++i)
+		mData.push_back(pData[i]);
+}
+
+void DataBlock::AddFloat2(Float f0, Float f1)
+{
+	AddFloat(f0);
+	AddFloat(f1);
+}
+
+void DataBlock::AddFloat3(Float f0, Float f1, Float f2)
+{
+	AddFloat2(f0, f1);
+	AddFloat(f2);
+}
+
+void DataBlock::AddFloat4(Float f0, Float f1, Float f2, Float f3)
+{
+	AddFloat3(f0, f1, f2);
+	AddFloat(f3);
+}
+
+void DataBlock::AddInt(int i)
+{
+	unsigned char* pData = (unsigned char*)&i;
+	for (int j = 0; j < sizeof(int); ++j)
+		mData.push_back(pData[j]);
+}
+
+void DataBlock::AddInt2(int i0, int i1)
+{
+	AddInt(i0);
+	AddInt(i1);
+}
+
+void DataBlock::AddInt3(int i0, int i1, int i2)
+{
+	AddInt2(i0, i1);
+	AddInt(i2);
+}
+
+void DataBlock::AddInt4(int i0, int i1, int i2, int i3)
+{
+	AddInt3(i0, i1, i2);
+	AddInt(i3);
+}
+
+void* DataBlock::GetData()
+{
+	if (mData.empty())
+		return NULL;
+	else
+		return &mData[0];
+}
+
+int DataBlock::GetSize()
+{
+	return (int)mData.size();
+}
+
+Exp_StructDef::Exp_StructDef(std::string name)
+{
+	mStructName = name;
+}
+
+Exp_StructDef::~Exp_StructDef()
+{
+
+}
+
+void Exp_StructDef::AddFloat()
+{
+	Element elem = {false, (void*)VarType::kFloat};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddFloat2()
+{
+	Element elem = {false, (void*)VarType::kFloat2};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddFloat3()
+{
+	Element elem = {false, (void*)VarType::kFloat3};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddFloat4()
+{
+	Element elem = {false, (void*)VarType::kFloat4};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddInt()
+{
+	Element elem = {false, (void*)VarType::kInt};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddInt2()
+{
+	Element elem = {false, (void*)VarType::kInt2};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddInt3()
+{
+	Element elem = {false, (void*)VarType::kInt3};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddInt4()
+{
+	Element elem = {false, (void*)VarType::kInt4};
+	mElements.push_back(elem);
+}
+
+void Exp_StructDef::AddStruct(const Exp_StructDef* subStruct)
+{
+	Element elem = {true, (void*)subStruct};
+	mElements.push_back(elem);
+}
+
+int Exp_StructDef::GetStructSize() const
+{
+	int totalSize = 0;
+	for (size_t i = 0; i < mElements.size(); ++i) {
+		int curSize = 0;
+		if (!mElements[i].isStruct) {
+			switch ((VarType)(int)mElements[i].type)
+			{
+			case VarType::kFloat:
+				curSize = sizeof(Float);
+				break;
+			case VarType::kFloat2:
+				curSize = sizeof(Float)*2;
+				break;
+			case VarType::kFloat3:
+				curSize = sizeof(Float)*3;
+				break;
+			case VarType::kFloat4:
+				curSize = sizeof(Float)*4;
+				break;
+			case VarType::kInt:
+				curSize = sizeof(int);
+				break;
+			case VarType::kInt2:
+				curSize = sizeof(int)*2;
+				break;
+			case VarType::kInt3:
+				curSize = sizeof(int)*3;
+				break;
+			case VarType::kInt4:
+				curSize = sizeof(int)*4;
+				break;
+			}
+		}
+		else
+			curSize = ((Exp_StructDef*)mElements[i].type)->GetStructSize();
+
+		totalSize += curSize;
+	}
+
+	return totalSize;
+}
+
+int Exp_StructDef::GetElementCount() const
+{
+	return (int)mElements.size();
+}
+
+VarType Exp_StructDef::GetElementType(int idx) const
+{
+	return ((VarType)(int)mElements[idx].type);
+}
+
+void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
+{
+	mErrorMessages.push_back(std::pair<Token, std::string>(token, str));
+}
+
+bool CompilingContext::IsStructDefinePartten()
+{
+	Token t0 = PeekNextToken(0);
+	Token t1 = PeekNextToken(1);
+	Token t2 = PeekNextToken(2);
+
+	if (!t0.IsValid() || !t1.IsValid() || !t2.IsValid())
+		return false;
+
+	if (!t0.IsEqual("struct"))
+		return false;
+
+	if (!t1.IsEqual("{"))
+		return false;
+
+	if (t2.GetType() != Token::kIdentifier)
+		return false;
+
+	return true;
+}
+
+Exp_StructDef* CompilingContext::ParseStructDefine()
+{
+	Token curT = GetNextToken();
+	if (!curT.IsValid() || !curT.IsEqual("struct")) {
+		AddErrorMessage(curT, "Structure definition is not started with keyword \"struct\"");
+		return NULL;
+	}
+
+	curT = GetNextToken();
+	if (!curT.IsValid() || !curT.IsEqual("{")) {
+		AddErrorMessage(curT, "\"{\" is expected after keyword \"struct\"");
+		return NULL;
+	}
+
+	curT = GetNextToken();
+	if (!curT.IsValid()) {
+		AddErrorMessage(curT, "Invalid token expected.");
+		return NULL;
+	}
+
+	do {
+
+	} while (PeekNextToken(0).IsValid() && PeekNextToken(0).IsEqual("}"));
+
+	return NULL;
 }
 
 } // namespace SC
