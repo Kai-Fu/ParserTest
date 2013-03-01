@@ -32,8 +32,11 @@ namespace SC {
 
 	void Initialize_AST_Gen();
 	void Finish_AST_Gen();
+
 	bool IsBuiltInType(const Token& token, VarType* out_type = NULL);
 	bool IsKeyWord(const Token& token, KeyWord* out_key = NULL);
+
+
 
 	class Token
 	{
@@ -116,7 +119,9 @@ namespace SC {
 	{
 	private:
 		std::vector<std::pair<Token, DataBlock> > mVarDefs;
-		
+		VarType mVarType;
+		std::string mStructName;
+
 	public:
 		Exp_VarDef(Exp_VarDef::VarType type);
 		virtual ~Exp_VarDef();
@@ -218,8 +223,8 @@ namespace SC {
 		Token PeekNextToken(int next_i);
 
 
-		bool IsVarDefinePartten();
-		Exp_VarDef* ParseVarDefine();
+		bool IsVarDefinePartten(bool allowInit);
+		Exp_VarDef* ParseVarDefine(bool allowInit);
 
 		bool IsStructDefinePartten();
 		Exp_StructDef* ParseStructDefine();

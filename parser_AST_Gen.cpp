@@ -64,7 +64,7 @@ int Token::GetBinaryOpLevel() const
 
 Token::Type Token::GetType() const
 {
-
+	return mType;
 }
 
 bool Token::IsValid() const
