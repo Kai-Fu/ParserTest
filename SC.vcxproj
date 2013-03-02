@@ -77,10 +77,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="parser_AST_Gen.cpp" />
+    <ClCompile Include="parser_defines.cpp" />
     <ClCompile Include="SC.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="parser_AST_Gen.h" />
+    <ClInclude Include="parser_defines.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

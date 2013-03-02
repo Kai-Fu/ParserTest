@@ -627,4 +627,66 @@ Exp_StructDef* CompilingContext::ParseStructDefine()
 	return NULL;
 }
 
+bool CompilingContext::IsVarDefinePartten(bool allowInit)
+{
+	Token t0 = PeekNextToken(0);
+	Token t1 = PeekNextToken(1);
+
+	if (!t0.IsValid() || !t1.IsValid())
+		return false;
+
+	if (!IsBuiltInType(t0)) {
+		if (!mpCurrentDomain->IsTypeDefined(t0.ToStdString())) {
+			// This token is neither a built-in type nor a user-defined type.
+			return false;
+		}
+	}
+
+	if (t1.GetType() != Token::kIdentifier)
+		return false;
+
+	return true;
+}
+
+Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
+{
+	Token curT = GetNextToken();
+
+	if (!curT.IsValid() ||
+		!IsBuiltInType(curT) ||
+		!mpCurrentDomain->IsTypeDefined(curT.ToStdString())) {
+		AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
+		return NULL;
+	}
+
+	do {
+		curT = GetNextToken();
+		if (curT.GetType() != Token::kIdentifier) {
+			AddErrorMessage(curT, "Invalid token, must be a valid identifier.");
+			return NULL;
+		}
+		if (IsBuiltInType(curT)) {
+			AddErrorMessage(curT, "The built-in type cannot be used as variable.");
+			return NULL;
+		}
+		if (IsKeyWord(curT)) {
+			AddErrorMessage(curT, "The keyword cannot be used as variable.");
+			return NULL;
+		}
+		if (mpCurrentDomain->IsTypeDefined(curT.ToStdString())) {
+			AddErrorMessage(curT, "A user-defined type cannot be redefined as variable.");
+			return NULL;
+		}
+		if (mpCurrentDomain->IsVariableDefined(curT.ToStdString(), false)) {
+			AddErrorMessage(curT, "Variable redefination is not allowed in the same code block.");
+			return NULL;
+		}
+		// Now we can accept this variable
+		
+	} while (PeekNextToken(0).IsEqual(","));
+
+
+
+}
+
 } // namespace SC

@@ -3,25 +3,12 @@
 #include <vector>
 #include <list>
 #include <hash_map>
-
-#define MAX_TOKEN_LENGTH 100
+#include "parser_defines.h"
 
 namespace SC {
 
-	typedef float Float;
-	class Token;
 
-	enum VarType {
-		kFloat,
-		kFloat2,
-		kFloat3,
-		kFloat4,
-		kInt,
-		kInt2,
-		kInt3,
-		kInt4,
-		kStructure
-		};
+	class Token;
 
 	enum KeyWord {
 		kStructDef,
@@ -178,7 +165,7 @@ namespace SC {
 		static void ClearInstances();
 
 		bool IsTypeDefined(const std::string& typeName);
-		bool IsVariableDefined(bool bThisDomain);
+		bool IsVariableDefined(const std::string& varName, bool includeParent);
 	};
 
 	class FunctionDomain : public CodeDomain
@@ -212,6 +199,7 @@ namespace SC {
 		std::list<std::pair<Token, std::string> > mErrorMessages;
 
 		RootDomain mRootCodeDomain;
+		CodeDomain* mpCurrentDomain;
 
 	private:
 		void AddErrorMessage(const Token& token, const std::string& str);
