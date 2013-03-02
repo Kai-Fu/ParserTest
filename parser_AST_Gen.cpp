@@ -5,7 +5,6 @@
 namespace SC {
 
 Token Token::sInvalid = Token(NULL, 0, -1, Token::kUnknown);
-std::list<CodeDomain*> CodeDomain::sInstances;
 
 Token::Token(const char* p, int num, int line, Type tp)
 {
@@ -386,14 +385,6 @@ bool IsKeyWord(const Token& token, KeyWord* out_key)
 		return false;
 }
 
-void CodeDomain::ClearInstances()
-{
-	std::list<CodeDomain*>::iterator it = sInstances.begin();
-	for (; it != sInstances.end(); ++it)
-		delete *it;
-	sInstances.clear();
-}
-
 void DataBlock::AddFloat(Float f)
 {
 	unsigned char* pData = (unsigned char*)&f;
@@ -651,13 +642,18 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
 {
 	Token curT = GetNextToken();
+	VarType varType = VarType::kInvalid;
 
 	if (!curT.IsValid() ||
-		!IsBuiltInType(curT) ||
+		!IsBuiltInType(curT, &varType) ||
 		!mpCurrentDomain->IsTypeDefined(curT.ToStdString())) {
 		AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
 		return NULL;
 	}
+
+	if (varType == VarType::kInvalid)
+		varType = VarType::kStructure;
+	Exp_VarDef* ret = new Exp_VarDef(varType);
 
 	do {
 		curT = GetNextToken();
@@ -677,15 +673,45 @@ Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
 			AddErrorMessage(curT, "A user-defined type cannot be redefined as variable.");
 			return NULL;
 		}
+		else {
+			varType = VarType::kStructure;
+		}
+
 		if (mpCurrentDomain->IsVariableDefined(curT.ToStdString(), false)) {
 			AddErrorMessage(curT, "Variable redefination is not allowed in the same code block.");
 			return NULL;
 		}
+
 		// Now we can accept this variable
+		//
+		if (varType == VarType::kStructure)
+			ret->SetStructName(curT.ToStdString());
+
+		int varIdx = ret->AddVariable(curT);
+
+		// Test if the coming token is "=", which indicates the variable initialization.
+		//
+		if (allowInit && PeekNextToken(0).IsEqual("=")) {
+			// TODO: invoken the ParseExpression function to handle it.
+		}
+
+		// Test is the next token is ";", which indicates the end of the variable definition expression.
+		//
+		if (PeekNextToken(0).IsEqual(";")) {
+			GetNextToken(); // eat the ";"
+			break;
+		}
 		
 	} while (PeekNextToken(0).IsEqual(","));
 
-
+	if (ret->GetVariableCnt() > 0) 
+		return ret;
+	else {
+		// It shouldn't reach here.
+		assert(0);
+		delete ret;
+		return NULL;
+	}
 
 }
 

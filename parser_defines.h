@@ -14,11 +14,7 @@ namespace SC {
 		kInt2,
 		kInt3,
 		kInt4,
-		kStructure
+		kStructure,
+		kInvalid
 		};
-
-	struct StructDefine
-	{
-
-	}
 } // namespace SC

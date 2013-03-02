@@ -113,8 +113,10 @@ namespace SC {
 		Exp_VarDef(Exp_VarDef::VarType type);
 		virtual ~Exp_VarDef();
 
+		void SetStructName(const std::string& structName);
 		// return variable index in this VarDef expression
 		int AddVariable(const Token& var);
+		int GetVariableCnt() const;
 		DataBlock* GetVarDataBlock(int idx);
 	};
 
@@ -157,12 +159,9 @@ namespace SC {
 
 		std::vector<Expression*> mExpressions;
 
-		static std::list<CodeDomain*> sInstances;
 	public:
 		CodeDomain();
 		virtual ~CodeDomain();
-
-		static void ClearInstances();
 
 		bool IsTypeDefined(const std::string& typeName);
 		bool IsVariableDefined(const std::string& varName, bool includeParent);
