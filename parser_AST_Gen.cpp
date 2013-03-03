@@ -707,7 +707,7 @@ Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
 	if (ret->GetVariableCnt() > 0) 
 		return ret;
 	else {
-		// It shouldn't reach here.
+		// It shouldn't reach here because any invalid token should be detected in the code above.
 		assert(0);
 		delete ret;
 		return NULL;

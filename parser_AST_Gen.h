@@ -149,7 +149,7 @@ namespace SC {
 		VarType GetElementType(int idx) const;
 	};
 
-	class CodeDomain
+	class CodeDomain : public Expression
 	{
 	private:
 		CodeDomain* mpParentDomain;
