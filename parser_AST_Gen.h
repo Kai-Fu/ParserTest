@@ -54,6 +54,7 @@ namespace SC {
 	public:
 		static Token sInvalid;
 	public:
+		Token();
 		Token(const char* p, int num, int line, Type tp);
 		Token(const Token& ref);
 
@@ -101,53 +102,9 @@ namespace SC {
 		Expression() {}
 		virtual ~Expression() {}
 	};
-
-	class Exp_VarDef : public Expression
-	{
-	private:
-		std::vector<std::pair<Token, DataBlock> > mVarDefs;
-		VarType mVarType;
-		std::string mStructName;
-
-	public:
-		Exp_VarDef(Exp_VarDef::VarType type);
-		virtual ~Exp_VarDef();
-
-		void SetStructName(const std::string& structName);
-		// return variable index in this VarDef expression
-		int AddVariable(const Token& var);
-		int GetVariableCnt() const;
-		DataBlock* GetVarDataBlock(int idx);
-	};
-
-	class Exp_StructDef : public Expression
-	{
-	private:
-		struct Element {
-			bool isStruct;
-			void* type;
-		};
-
-		std::string mStructName;
-		std::vector<Element> mElements;
-	public:
-		Exp_StructDef(std::string name);
-		virtual ~Exp_StructDef();
-
-		void AddFloat();
-		void AddFloat2();
-		void AddFloat3();
-		void AddFloat4();
-		void AddInt();
-		void AddInt2();
-		void AddInt3();
-		void AddInt4();
-		void AddStruct(const Exp_StructDef* subStruct);
-
-		int GetStructSize() const;
-		int GetElementCount() const;
-		VarType GetElementType(int idx) const;
-	};
+	
+	class Exp_StructDef;
+	class CompilingContext;
 
 	class CodeDomain : public Expression
 	{
@@ -160,12 +117,65 @@ namespace SC {
 		std::vector<Expression*> mExpressions;
 
 	public:
-		CodeDomain();
+		CodeDomain(CodeDomain* parent);
 		virtual ~CodeDomain();
 
+		void AddExpression(Expression* exp);
+		void AddDefinedType(Exp_StructDef* pStructDef);
 		bool IsTypeDefined(const std::string& typeName);
+
+		void AddDefinedVariable(const Token& t);
 		bool IsVariableDefined(const std::string& varName, bool includeParent);
+
+		Exp_StructDef* GetStructDefineByName(const std::string& name);
 	};
+
+	class Exp_VarDef : public Expression
+	{
+	private:
+		std::vector<std::pair<Token, DataBlock*> > mVarDefs;
+		VarType mVarType;
+		Exp_StructDef* mpStructDef;
+
+	public:
+		Exp_VarDef(VarType type);
+		virtual ~Exp_VarDef();
+		static Exp_VarDef* Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit);
+
+		void SetStructDef(Exp_StructDef* pStruct);
+		// return variable index in this VarDef expression
+		int AddVariable(const Token& var, DataBlock* pData = NULL);
+		int GetVariableCnt() const;
+		DataBlock* GetVarDataBlock(int idx);
+		Token GetVarName(int idx) const;
+		VarType GetVarType() const;
+		Exp_StructDef* GetStructDef();
+	};
+
+	class Exp_StructDef : public Expression
+	{
+	private:
+		struct Element {
+			bool isStruct;
+			void* type;
+			std::string name;
+		};
+		std::string mStructName;
+		std::vector<Element> mElements;
+		CodeDomain mStructDomain;
+	public:
+		Exp_StructDef(std::string name, CodeDomain* parentDomain);
+		virtual ~Exp_StructDef();
+		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
+
+		void AddElement(const std::string& varName, VarType type, Exp_StructDef* pStructDef);
+		int GetStructSize() const;
+		int GetElementCount() const;
+		const std::string& GetStructureName() const;
+		VarType GetElementType(int idx) const;
+	};
+
+
 
 	class FunctionDomain : public CodeDomain
 	{
@@ -179,7 +189,10 @@ namespace SC {
 	{
 	private:
 		std::vector<FunctionDomain*> mFunctions;
-		std::hash_map<std::string, CodeDomain*> mVariableGroups;
+	
+	public:
+		RootDomain();
+		virtual ~RootDomain();
 	};
 
 
@@ -191,36 +204,30 @@ namespace SC {
 		const char* mCurParsingPtr;
 		int mCurParsingLOC;
 
-		bool mIsInFuncBody;
-		std::string mCurFuncName;
 
 		std::list<Token> mBufferedToken;
 		std::list<std::pair<Token, std::string> > mErrorMessages;
 
-		RootDomain mRootCodeDomain;
-		CodeDomain* mpCurrentDomain;
+		RootDomain* mRootCodeDomain;
 
 	private:
-		void AddErrorMessage(const Token& token, const std::string& str);
-	public:
-		CompilingContext(const char* content);
+		bool ParseSingleExpression(CodeDomain* curDomain);
+		bool IsVarDefinePartten(bool allowInit, CodeDomain* curDomain);
+		bool IsStructDefinePartten();
+		bool ParseCodeDomain(CodeDomain* curDomain);
+		Token ScanForToken(std::string& errorMsg);
 
+	public:
+		CompilingContext();
+		~CompilingContext();
+
+		void AddErrorMessage(const Token& token, const std::string& str);
+		bool IsEOF() const;
 
 		Token GetNextToken();
 		Token PeekNextToken(int next_i);
 
-
-		bool IsVarDefinePartten(bool allowInit);
-		Exp_VarDef* ParseVarDefine(bool allowInit);
-
-		bool IsStructDefinePartten();
-		Exp_StructDef* ParseStructDefine();
-
-
-
-
-	private:
-		Token ScanForToken(std::string& errorMsg);
+		bool Parse(const char* content);
 
 
 	};

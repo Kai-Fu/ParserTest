@@ -6,6 +6,11 @@ namespace SC {
 
 Token Token::sInvalid = Token(NULL, 0, -1, Token::kUnknown);
 
+Token::Token()
+{
+	*this = sInvalid;
+}
+
 Token::Token(const char* p, int num, int line, Type tp)
 {
 	mpData = p;
@@ -283,12 +288,35 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	return ret;
 }
 
-CompilingContext::CompilingContext(const char* content)
+CompilingContext::CompilingContext()
 {
+	mContentPtr = NULL;
+	mCurParsingPtr = mContentPtr;
+	mCurParsingLOC = 0;
+	mRootCodeDomain = NULL;
+}
+
+CompilingContext::~CompilingContext()
+{
+	if (mRootCodeDomain)
+		delete mRootCodeDomain;
+}
+
+bool CompilingContext::Parse(const char* content)
+{
+	mBufferedToken.clear();
+	mErrorMessages.clear();
 	mContentPtr = content;
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 1;
-	mIsInFuncBody = false;
+
+	if (mRootCodeDomain)
+		delete mRootCodeDomain;
+
+	mRootCodeDomain = new RootDomain();
+	while (ParseCodeDomain(mRootCodeDomain));
+
+	return IsEOF() && mErrorMessages.empty();
 }
 
 Token CompilingContext::GetNextToken()
@@ -448,7 +476,8 @@ int DataBlock::GetSize()
 	return (int)mData.size();
 }
 
-Exp_StructDef::Exp_StructDef(std::string name)
+Exp_StructDef::Exp_StructDef(std::string name, CodeDomain* parentDomain) :
+	mStructDomain(parentDomain)
 {
 	mStructName = name;
 }
@@ -458,57 +487,74 @@ Exp_StructDef::~Exp_StructDef()
 
 }
 
-void Exp_StructDef::AddFloat()
+Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDomain)
 {
-	Element elem = {false, (void*)VarType::kFloat};
-	mElements.push_back(elem);
+	Token curT = context.GetNextToken();
+	if (!curT.IsValid() || !curT.IsEqual("struct")) {
+		context.AddErrorMessage(curT, "Structure definition is not started with keyword \"struct\"");
+		return NULL;
+	}
+
+	curT = context.GetNextToken();
+	if (!curT.IsValid() || !curT.GetType() != Token::kIdentifier) {
+		context.AddErrorMessage(curT, "Invalid structure name.");
+		return NULL;
+	}
+
+	if (IsBuiltInType(curT) || IsKeyWord(curT) || curDomain->IsTypeDefined(curT.ToStdString()) || curDomain->IsVariableDefined(curT.ToStdString(), true)) {
+		context.AddErrorMessage(curT, "Structure name cannot be the built-in type, keyword, user-defined type or previous defined variable name.");
+		return NULL;
+	}
+	std::string structName = curT.ToStdString();
+
+	curT = context.GetNextToken();
+	if (!curT.IsValid() || !curT.IsEqual("{")) {
+		context.AddErrorMessage(curT, "\"{\" is expected after defining a structure.");
+		return NULL;
+	}
+
+	curT = context.GetNextToken();
+	if (!curT.IsValid()) {
+		context.AddErrorMessage(curT, "Invalid token expected.");
+		return NULL;
+	}
+
+	bool succeed = true;
+	Exp_StructDef* pStructDef = new Exp_StructDef(structName, curDomain);
+	do {
+		Exp_VarDef* exp = Exp_VarDef::Parse(context, &pStructDef->mStructDomain, false);
+		if (!exp) {
+			succeed = false;
+			break;
+		}
+		
+		for (int vi = 0; vi < exp->GetVariableCnt(); ++vi) {
+			if (pStructDef->mStructDomain.IsVariableDefined(exp->GetVarName(vi).ToStdString(), false)) {
+				context.AddErrorMessage(exp->GetVarName(vi), "Member variable already defined.");
+				succeed = false;
+				break;
+			}
+			pStructDef->AddElement(exp->GetVarName(vi).ToStdString(), exp->GetVarType(), exp->GetStructDef());
+		}
+		delete exp;
+	} while (context.PeekNextToken(0).IsValid() && context.PeekNextToken(0).IsEqual("}"));
+
+	if (!succeed || pStructDef->GetElementCount() == 0) {
+		delete pStructDef;
+		return NULL;
+	}
+	else {
+		curDomain->AddDefinedType(pStructDef);
+		return pStructDef;
+	}
 }
 
-void Exp_StructDef::AddFloat2()
+void Exp_StructDef::AddElement(const std::string& varName, VarType type, Exp_StructDef* pStructDef)
 {
-	Element elem = {false, (void*)VarType::kFloat2};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddFloat3()
-{
-	Element elem = {false, (void*)VarType::kFloat3};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddFloat4()
-{
-	Element elem = {false, (void*)VarType::kFloat4};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddInt()
-{
-	Element elem = {false, (void*)VarType::kInt};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddInt2()
-{
-	Element elem = {false, (void*)VarType::kInt2};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddInt3()
-{
-	Element elem = {false, (void*)VarType::kInt3};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddInt4()
-{
-	Element elem = {false, (void*)VarType::kInt4};
-	mElements.push_back(elem);
-}
-
-void Exp_StructDef::AddStruct(const Exp_StructDef* subStruct)
-{
-	Element elem = {true, (void*)subStruct};
+	Element elem;
+	elem.isStruct = (type == VarType::kStructure);
+	elem.name = varName;
+	elem.type = (type == VarType::kStructure ? (void*)type : (void*)pStructDef);
 	mElements.push_back(elem);
 }
 
@@ -560,6 +606,11 @@ int Exp_StructDef::GetElementCount() const
 	return (int)mElements.size();
 }
 
+const std::string& Exp_StructDef::GetStructureName() const
+{
+	return mStructName;
+}
+
 VarType Exp_StructDef::GetElementType(int idx) const
 {
 	return ((VarType)(int)mElements[idx].type);
@@ -582,43 +633,18 @@ bool CompilingContext::IsStructDefinePartten()
 	if (!t0.IsEqual("struct"))
 		return false;
 
-	if (!t1.IsEqual("{"))
+
+	if (t1.GetType() != Token::kIdentifier)
 		return false;
 
-	if (t2.GetType() != Token::kIdentifier)
+	if (t2.IsEqual("{"))
 		return false;
 
 	return true;
 }
 
-Exp_StructDef* CompilingContext::ParseStructDefine()
-{
-	Token curT = GetNextToken();
-	if (!curT.IsValid() || !curT.IsEqual("struct")) {
-		AddErrorMessage(curT, "Structure definition is not started with keyword \"struct\"");
-		return NULL;
-	}
 
-	curT = GetNextToken();
-	if (!curT.IsValid() || !curT.IsEqual("{")) {
-		AddErrorMessage(curT, "\"{\" is expected after keyword \"struct\"");
-		return NULL;
-	}
-
-	curT = GetNextToken();
-	if (!curT.IsValid()) {
-		AddErrorMessage(curT, "Invalid token expected.");
-		return NULL;
-	}
-
-	do {
-
-	} while (PeekNextToken(0).IsValid() && PeekNextToken(0).IsEqual("}"));
-
-	return NULL;
-}
-
-bool CompilingContext::IsVarDefinePartten(bool allowInit)
+bool CompilingContext::IsVarDefinePartten(bool allowInit, CodeDomain* curDomain)
 {
 	Token t0 = PeekNextToken(0);
 	Token t1 = PeekNextToken(1);
@@ -627,7 +653,7 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 		return false;
 
 	if (!IsBuiltInType(t0)) {
-		if (!mpCurrentDomain->IsTypeDefined(t0.ToStdString())) {
+		if (!curDomain->IsTypeDefined(t0.ToStdString())) {
 			// This token is neither a built-in type nor a user-defined type.
 			return false;
 		}
@@ -639,70 +665,72 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 	return true;
 }
 
-Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
+Exp_VarDef* Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit)
 {
-	Token curT = GetNextToken();
+	Token curT = context.GetNextToken();
 	VarType varType = VarType::kInvalid;
 
 	if (!curT.IsValid() ||
 		!IsBuiltInType(curT, &varType) ||
-		!mpCurrentDomain->IsTypeDefined(curT.ToStdString())) {
-		AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
+		!curDomain->IsTypeDefined(curT.ToStdString())) {
+		context.AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
 		return NULL;
 	}
 
-	if (varType == VarType::kInvalid)
+	Exp_StructDef* pStructDef = NULL;
+	if (varType == VarType::kInvalid) {
+		pStructDef = curDomain->GetStructDefineByName(curT.ToStdString());
 		varType = VarType::kStructure;
+	}
+
 	Exp_VarDef* ret = new Exp_VarDef(varType);
 
 	do {
-		curT = GetNextToken();
+		curT = context.GetNextToken();
 		if (curT.GetType() != Token::kIdentifier) {
-			AddErrorMessage(curT, "Invalid token, must be a valid identifier.");
+			context.AddErrorMessage(curT, "Invalid token, must be a valid identifier.");
 			return NULL;
 		}
 		if (IsBuiltInType(curT)) {
-			AddErrorMessage(curT, "The built-in type cannot be used as variable.");
+			context.AddErrorMessage(curT, "The built-in type cannot be used as variable.");
 			return NULL;
 		}
 		if (IsKeyWord(curT)) {
-			AddErrorMessage(curT, "The keyword cannot be used as variable.");
+			context.AddErrorMessage(curT, "The keyword cannot be used as variable.");
 			return NULL;
 		}
-		if (mpCurrentDomain->IsTypeDefined(curT.ToStdString())) {
-			AddErrorMessage(curT, "A user-defined type cannot be redefined as variable.");
+		if (curDomain->IsTypeDefined(curT.ToStdString())) {
+			context.AddErrorMessage(curT, "A user-defined type cannot be redefined as variable.");
 			return NULL;
-		}
-		else {
-			varType = VarType::kStructure;
 		}
 
-		if (mpCurrentDomain->IsVariableDefined(curT.ToStdString(), false)) {
-			AddErrorMessage(curT, "Variable redefination is not allowed in the same code block.");
+		if (curDomain->IsVariableDefined(curT.ToStdString(), false)) {
+			context.AddErrorMessage(curT, "Variable redefination is not allowed in the same code block.");
 			return NULL;
 		}
 
 		// Now we can accept this variable
 		//
 		if (varType == VarType::kStructure)
-			ret->SetStructName(curT.ToStdString());
+			ret->SetStructDef(pStructDef);
 
 		int varIdx = ret->AddVariable(curT);
+		curDomain->AddDefinedVariable(curT);
 
 		// Test if the coming token is "=", which indicates the variable initialization.
 		//
-		if (allowInit && PeekNextToken(0).IsEqual("=")) {
+		if (allowInit && context.PeekNextToken(0).IsEqual("=")) {
 			// TODO: invoken the ParseExpression function to handle it.
 		}
 
 		// Test is the next token is ";", which indicates the end of the variable definition expression.
 		//
-		if (PeekNextToken(0).IsEqual(";")) {
-			GetNextToken(); // eat the ";"
+		if (context.PeekNextToken(0).IsEqual(";")) {
+			context.GetNextToken(); // eat the ";"
 			break;
 		}
 		
-	} while (PeekNextToken(0).IsEqual(","));
+	} while (context.PeekNextToken(0).IsEqual(","));
 
 	if (ret->GetVariableCnt() > 0) 
 		return ret;
@@ -712,7 +740,185 @@ Exp_VarDef* CompilingContext::ParseVarDefine(bool allowInit)
 		delete ret;
 		return NULL;
 	}
+}
 
+bool CompilingContext::IsEOF() const
+{
+	return (*mCurParsingPtr == '\0');
+}
+
+bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
+{
+	if (IsVarDefinePartten(true, curDomain)) {
+		Exp_VarDef* varDef = Exp_VarDef::Parse(*this, curDomain, true);
+		if (varDef)
+			curDomain->AddExpression(varDef);
+		else
+			return false;
+	}
+	else if (IsStructDefinePartten()) {
+		Exp_StructDef* structDef = Exp_StructDef::Parse(*this, curDomain);
+		if (structDef)
+			curDomain->AddExpression(structDef);
+		else
+			return false;
+	}
+	else {
+
+	}
+	return true;
+}
+
+bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
+{
+	if (IsEOF())
+		return false;
+
+	bool multiExp = PeekNextToken(0).IsEqual("{");
+	if (multiExp) {
+		GetNextToken(); // eat the "{"
+
+		CodeDomain* childDomain = new CodeDomain(curDomain);
+		curDomain->AddExpression(childDomain);
+		if (!ParseCodeDomain(childDomain))
+			return false;
+
+		Token endT = PeekNextToken(0);
+		if (endT.IsEqual("{"))
+			GetNextToken(); // eat the "}"
+		else {
+			AddErrorMessage(endT, "\"{\" is expected.");
+			return false;
+		}
+	}
+	else {
+		while (ParseSingleExpression(curDomain));
+		if (!mErrorMessages.empty())
+			return false;
+	}
+
+	// The EOF is expected here since all the errors should be caught before and here it should reach the end of file
+	return IsEOF();
+}
+
+CodeDomain::CodeDomain(CodeDomain* parent)
+{
+	mpParentDomain = parent;
+}
+
+CodeDomain::~CodeDomain()
+{
+	std::hash_map<std::string, Exp_StructDef*>::iterator it_struct = mDefinedStructures.begin();
+	for (; it_struct != mDefinedStructures.end(); ++it_struct) 
+		delete it_struct->second;
+	
+	std::vector<Expression*>::iterator it_exp = mExpressions.begin();
+	for (; it_exp != mExpressions.end(); ++it_exp) 
+		delete *it_exp;
+}
+
+void CodeDomain::AddExpression(Expression* exp)
+{
+	if (exp)
+		mExpressions.push_back(exp);
+}
+
+void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
+{
+	if (pStructDef)
+		mDefinedStructures[pStructDef->GetStructureName()] = pStructDef;
+}
+
+bool CodeDomain::IsTypeDefined(const std::string& typeName)
+{
+	return mDefinedStructures.find(typeName) != mDefinedStructures.end();
+}
+
+void CodeDomain::AddDefinedVariable(const Token& t)
+{
+	mDefinedVariables[t.ToStdString()] = t;
+}
+
+bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParent)
+{
+	if (mDefinedVariables.find(varName) == mDefinedVariables.end()) {
+		if (includeParent && mpParentDomain) 
+			return mpParentDomain->IsVariableDefined(varName, includeParent);
+		else
+			return false;
+	}
+	else
+		return false;
+}
+
+Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& name)
+{
+	std::hash_map<std::string, Exp_StructDef*>::iterator it = mDefinedStructures.find(name);
+	if (it != mDefinedStructures.end())
+		return it->second;
+	else 
+		return mpParentDomain->GetStructDefineByName(name);
+}
+
+Exp_VarDef::Exp_VarDef(VarType type)
+{
+	mVarType = type;
+	mpStructDef = NULL;
+}
+
+Exp_VarDef::~Exp_VarDef()
+{
+
+}
+
+void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
+{
+	mpStructDef = pStruct;
+}
+
+// return variable index in this VarDef expression
+int Exp_VarDef::AddVariable(const Token& var, DataBlock* pData)
+{
+	mVarDefs.push_back(std::pair<Token, DataBlock*>(var, pData));
+	return (int)mVarDefs.size() - 1;
+}
+
+int Exp_VarDef::GetVariableCnt() const
+{
+	return (int)mVarDefs.size();
+}
+
+DataBlock* Exp_VarDef::GetVarDataBlock(int idx)
+{
+	return mVarDefs[idx].second;
+}
+
+Token Exp_VarDef::GetVarName(int idx) const
+{
+	return mVarDefs[idx].first;
+}
+
+VarType Exp_VarDef::GetVarType() const
+{
+	return mVarType;
+}
+
+Exp_StructDef* Exp_VarDef::GetStructDef()
+{
+	return mpStructDef;
+}
+
+RootDomain::RootDomain() :
+	CodeDomain(NULL)
+{
+
+}
+
+RootDomain::~RootDomain()
+{
+	std::vector<FunctionDomain*>::iterator it_func = mFunctions.begin();
+	for (; it_func != mFunctions.end(); ++it_func) 
+		delete *it_func;
 }
 
 } // namespace SC
