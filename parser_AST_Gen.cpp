@@ -23,6 +23,7 @@ Token::Token(const Token& ref)
 {
 	mpData = ref.mpData;
 	mNumOfChar = ref.mNumOfChar;
+	mLOC = ref.mLOC;
 	mType = ref.mType;
 }
 
@@ -142,43 +143,57 @@ static bool _isFirstN_Equal(const char* test_str, const char* dest)
 
 Token CompilingContext::ScanForToken(std::string& errorMsg)
 {
-	// Eat the white spaces and new line characters.
-	//
-	bool isNewLineChar = false;
-	while (*mCurParsingPtr == ' ' || (isNewLineChar = (*mCurParsingPtr == '\n'))) {
-		if (isNewLineChar)
-			++mCurParsingLOC;
-		++mCurParsingPtr;
-	}
-
-	// Skip the comments, e.g. //... and /* ... */
-	//
-	if (*mCurParsingPtr == '/') {
-
-		if (*(mCurParsingPtr + 1) == '*') {
-			mCurParsingPtr += 2;
-			// Seek for the end of the comments(*/)
-			bool isLastAsterisk = false;
-			while (*mCurParsingPtr != '\0') {
-				if (isLastAsterisk && *mCurParsingPtr == '/')
-					break;
-				if (*mCurParsingPtr != '*') 
-					isLastAsterisk = true;
-			}
-			if (*mCurParsingPtr == '\0') {
-				errorMsg = "Comments not ended - unexpected end of file.";
-				return Token::sInvalid;
-			}
-		}
-		else if (*(mCurParsingPtr + 1) == '/') {
-			mCurParsingPtr += 2;
-			// Go to the end of the line
-			while (*mCurParsingPtr != '\0' && *mCurParsingPtr != '\n') 
-				++mCurParsingPtr;
-
+	while (1) {
+		const char* beforeSkip = mCurParsingPtr;
+		// Eat the white spaces and new line characters.
+		//
+		while (*mCurParsingPtr == ' ' || *mCurParsingPtr == '\n' || *mCurParsingPtr == '\t') {
 			if (*mCurParsingPtr == '\n')
-				mCurParsingLOC++;
+				++mCurParsingLOC;
+			++mCurParsingPtr;
 		}
+
+		// Skip the comments, e.g. //... and /* ... */
+		//
+		if (*mCurParsingPtr == '/') {
+
+			if (*(mCurParsingPtr + 1) == '*') {
+				mCurParsingPtr += 2;
+				// Seek for the end of the comments(*/)
+				bool isLastAsterisk = false;
+				while (*mCurParsingPtr != '\0') {
+					if (isLastAsterisk && *mCurParsingPtr == '/')
+						break;
+					if (*mCurParsingPtr == '*') 
+						isLastAsterisk = true;
+					if (*mCurParsingPtr == '\n') 
+						++mCurParsingLOC;
+					++mCurParsingPtr;
+				}
+				if (*mCurParsingPtr == '\0') {
+					errorMsg = "Comments not ended - unexpected end of file.";
+					return Token::sInvalid;
+				}
+				else {
+					++mCurParsingPtr; // Skip "/"
+				}
+			}
+			else if (*(mCurParsingPtr + 1) == '/') {
+				mCurParsingPtr += 2;
+				// Go to the end of the line
+				while (*mCurParsingPtr != '\0' && *mCurParsingPtr != '\n') 
+					++mCurParsingPtr;
+
+				if (*mCurParsingPtr == '\n') {
+					mCurParsingLOC++;
+					++mCurParsingPtr;
+				}
+			}
+		}
+
+		// Break from this loop since the pointer doesn't move forward
+		if (beforeSkip == mCurParsingPtr)
+			break;
 	}
 
 	Token ret = Token::sInvalid;
@@ -245,7 +260,7 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	else {
 		// Now handling for constants for identifiers
 		bool isFirstCharNumber = _isNumber(*mCurParsingPtr);
-		if (!isFirstCharNumber && (!_isAlpha(*mCurParsingPtr) || *mCurParsingPtr != '_')) {
+		if (!isFirstCharNumber && !_isAlpha(*mCurParsingPtr) && *mCurParsingPtr != '_') {
 			// Unrecoginzed character
 			return Token(mCurParsingPtr++, 1, mCurParsingLOC, Token::kUnknown);
 		}
@@ -257,6 +272,7 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 				_isNumber(*mCurParsingPtr) ||
 				*mCurParsingPtr == '_')) {
 			idLen++;
+			++mCurParsingPtr;
 		}
 		bool hasNonNumber = false;
 		for (int i = 0; i < idLen; ++i) {
@@ -288,9 +304,9 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	return ret;
 }
 
-CompilingContext::CompilingContext()
+CompilingContext::CompilingContext(const char* content)
 {
-	mContentPtr = NULL;
+	mContentPtr = content;
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 0;
 	mRootCodeDomain = NULL;

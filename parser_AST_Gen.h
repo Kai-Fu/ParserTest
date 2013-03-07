@@ -218,7 +218,7 @@ namespace SC {
 		Token ScanForToken(std::string& errorMsg);
 
 	public:
-		CompilingContext();
+		CompilingContext(const char* content);
 		~CompilingContext();
 
 		void AddErrorMessage(const Token& token, const std::string& str);
