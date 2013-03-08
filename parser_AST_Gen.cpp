@@ -671,7 +671,7 @@ bool CompilingContext::IsStructDefinePartten()
 }
 
 
-bool CompilingContext::IsVarDefinePartten(bool allowInit, CodeDomain* curDomain)
+bool CompilingContext::IsVarDefinePartten(bool allowInit)
 {
 	Token t0 = PeekNextToken(0);
 	Token t1 = PeekNextToken(1);
@@ -679,12 +679,8 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit, CodeDomain* curDomain)
 	if (!t0.IsValid() || !t1.IsValid())
 		return false;
 
-	if (!IsBuiltInType(t0)) {
-		if (!curDomain->IsTypeDefined(t0.ToStdString())) {
-			// This token is neither a built-in type nor a user-defined type.
-			return false;
-		}
-	}
+	if (t0.GetType() != Token::kIdentifier)
+		return false;
 
 	if (t1.GetType() != Token::kIdentifier)
 		return false;
@@ -776,7 +772,7 @@ bool CompilingContext::IsEOF() const
 
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 {
-	if (IsVarDefinePartten(true, curDomain)) {
+	if (IsVarDefinePartten(true)) {
 		Exp_VarDef* varDef = Exp_VarDef::Parse(*this, curDomain, true);
 		if (varDef)
 			curDomain->AddExpression(varDef);
@@ -951,6 +947,107 @@ RootDomain::~RootDomain()
 	std::vector<FunctionDomain*>::iterator it_func = mFunctions.begin();
 	for (; it_func != mFunctions.end(); ++it_func) 
 		delete *it_func;
+}
+
+Exp_BinaryOp::Exp_BinaryOp(const std::string& op, Exp_ValueEval* pLeft, Exp_ValueEval* pRight)
+{
+	mOperator = op;
+	mpLeftExp = pLeft;
+	mpRightExp = pRight;
+}
+
+Exp_BinaryOp::~Exp_BinaryOp()
+{
+	delete mpLeftExp;
+	delete mpRightExp;
+}
+
+Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
+{
+	Token curT = GetNextToken();
+	if (curT.GetType() != Token::kIdentifier && 
+		curT.GetType() != Token::kUnaryOp && 
+		curT.GetType() != Token::kConstFloat &&
+		curT.GetType() != Token::kConstInt) {
+		AddErrorMessage(curT, "Invalid token for value expression.");
+		return NULL;
+	}
+
+	if (curT.GetType() == Token::kIdentifier) {
+		// This identifier must be a already defined variable, built-in type or constant
+		if (IsBuiltInType(curT)) {
+			// TODO: Parse and return the built-in type initializer
+		}
+		else if (curDomain->IsVariableDefined(curT.ToStdString(), true)) {
+			// TODO: Return a value ref expression
+		}
+		else {
+			// TODO: if the identifier is a function name, it should return the function call expression
+		}
+	}
+	else if (curT.GetType() == Token::kUnaryOp) {
+		// TODO: Generate a unary operator expression
+	}
+	else {
+		// TODO: return a constant expression
+	}
+
+	return NULL;
+}
+
+Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
+{
+	Exp_ValueEval* simpleExp0 = ParseSimpleExpression(curDomain);
+	if (!simpleExp0) {
+		// Must have some error message if it failed to parse a simple expression
+		assert(!mErrorMessages.empty()); 
+		return NULL;
+	}
+
+	Token curT = GetNextToken();
+	if (curT.IsEqual(";")) {
+		return simpleExp0;
+	}
+	if (curT.GetType() != Token::kBinaryOp) {
+		AddErrorMessage(curT, "Expect a binary operator.");
+		return NULL;
+	}
+	int op0_level = curT.GetBinaryOpLevel();
+	std::string op0_str = curT.ToStdString();
+
+	Exp_ValueEval* simpleExp1 = ParseSimpleExpression(curDomain);
+	if (!simpleExp1) {
+		// Must have some error message if it failed to parse a simple expression
+		assert(!mErrorMessages.empty()); 
+		return NULL;
+	}
+
+	// Get the next token to decide if the next binary operator is in high level of priority
+	Token nextT = GetNextToken();
+	if (nextT.IsEqual(";")) {
+		// we are done for this complex value expression, return it.
+		Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
+		return pBinaryOp;
+	}
+	else if (nextT.GetType() == Token::kBinaryOp) {
+		int op1_level = nextT.GetBinaryOpLevel();
+		std::string op1_str = nextT.ToStdString();
+
+		if (op1_level > op0_level) {
+			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain);
+			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
+			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
+			return pBinaryOp0;
+		}
+		else {
+			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain);
+			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
+			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
+			return pBinaryOp1;
+		}
+	}
+
+	return NULL;
 }
 
 } // namespace SC

@@ -175,7 +175,53 @@ namespace SC {
 		VarType GetElementType(int idx) const;
 	};
 
+	class Exp_ValueEval : public Expression
+	{
+	public:
+		virtual VarType GetValueType() = 0;
+		virtual bool Validate(std::string& errMsg) = 0;
+	};
 
+	class Exp_Constant : public Exp_ValueEval
+	{
+	private:
+		double mValue;
+	};
+
+	class Exp_VariableRef : public Exp_ValueEval
+	{
+	private:
+		Token mVariable;
+	};
+
+	class Exp_BuiltInInitializer : public Exp_ValueEval
+	{
+	private:
+		Exp_ValueEval* mpSubExprs[4];
+		VarType mType;
+	};
+
+	class Exp_UnaryOp : public Exp_ValueEval
+	{
+	private:
+		std::string mOpType;
+		Exp_ValueEval* mpExpr;
+	};
+
+	class Exp_BinaryOp : public Exp_ValueEval
+	{
+	private:
+		std::string mOperator;
+		Exp_ValueEval* mpLeftExp;
+		Exp_ValueEval* mpRightExp;
+
+	public:
+		Exp_BinaryOp(const std::string& op, Exp_ValueEval* pLeft, Exp_ValueEval* pRight);
+		virtual ~Exp_BinaryOp();
+
+		virtual VarType GetValueType();
+		virtual bool Validate(std::string& errMsg);
+	};
 
 	class FunctionDomain : public CodeDomain
 	{
@@ -211,10 +257,18 @@ namespace SC {
 		RootDomain* mRootCodeDomain;
 
 	private:
-		bool ParseSingleExpression(CodeDomain* curDomain);
-		bool IsVarDefinePartten(bool allowInit, CodeDomain* curDomain);
+		bool IsVarDefinePartten(bool allowInit);
 		bool IsStructDefinePartten();
+
+		bool ParseSingleExpression(CodeDomain* curDomain);
 		bool ParseCodeDomain(CodeDomain* curDomain);
+		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.
+		//
+		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
+		// Complex expression means it contains any simple expression and binary operation.
+		//
+		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain);
+
 		Token ScanForToken(std::string& errorMsg);
 
 	public:
