@@ -179,19 +179,28 @@ namespace SC {
 	{
 	public:
 		virtual VarType GetValueType() = 0;
-		virtual bool Validate(std::string& errMsg) = 0;
 	};
 
 	class Exp_Constant : public Exp_ValueEval
 	{
 	private:
 		double mValue;
+
+	public:
+		Exp_Constant(double v);
+		virtual ~Exp_Constant();
+
+		double GetValue() const;
 	};
 
 	class Exp_VariableRef : public Exp_ValueEval
 	{
 	private:
 		Token mVariable;
+		CodeDomain* mpDomain;
+		int mSwizzle[4];
+
+
 	};
 
 	class Exp_BuiltInInitializer : public Exp_ValueEval
@@ -220,7 +229,6 @@ namespace SC {
 		virtual ~Exp_BinaryOp();
 
 		virtual VarType GetValueType();
-		virtual bool Validate(std::string& errMsg);
 	};
 
 	class FunctionDomain : public CodeDomain
