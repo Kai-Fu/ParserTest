@@ -12,6 +12,7 @@ struct TestStruct1
 	float3 a; // comment test
 	/* This is commnent  */
 	int2 b;
+	//BadType c;
 };
 
 int myIntParam1;

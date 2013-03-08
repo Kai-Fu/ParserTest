@@ -558,17 +558,19 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 		}
 	} while (context.PeekNextToken(0).IsValid());
 
-	curT = context.GetNextToken();
-	if (!curT.IsEqual(";")) {
-		context.AddErrorMessage(curT, "\";\" is expected.");
-		succeed = false;
-	}
 
 	if (!succeed || pStructDef->GetElementCount() == 0) {
+		
 		delete pStructDef;
 		return NULL;
 	}
 	else {
+		curT = context.GetNextToken();
+		if (!curT.IsEqual(";")) {
+			context.AddErrorMessage(curT, "\";\" is expected.");
+			delete pStructDef;
+			return NULL;
+		}
 		curDomain->AddDefinedType(pStructDef);
 		return pStructDef;
 	}
