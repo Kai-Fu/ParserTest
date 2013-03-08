@@ -84,6 +84,9 @@
     <ClInclude Include="parser_AST_Gen.h" />
     <ClInclude Include="parser_defines.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="light_shader_example.ls" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

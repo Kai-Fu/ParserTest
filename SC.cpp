@@ -6,6 +6,8 @@
 
 int main(int argc, char* argv[])
 {
+	SC::Initialize_AST_Gen();
+
 	FILE* f = NULL;
 	fopen_s(&f, "light_shader_example.ls", "r");
 	if (f == NULL)
@@ -15,22 +17,32 @@ int main(int argc, char* argv[])
 	fseek(f, 0, SEEK_SET);
 
 	char* content = new char[len + 1];
-	size_t readSize = fread(content, 1, len, f);
-	if (readSize == 0)
+	char* line = content;
+	size_t totalLen = 0;
+
+	while (fgets(line, len, f) != NULL) {
+		size_t lineLen = strlen(line);
+		line += lineLen;
+		totalLen += lineLen;
+	}
+
+	if (totalLen == 0)
 		return -1;
 	else {
-		content[readSize] = '\0';
+		content[totalLen] = '\0';
 		SC::CompilingContext ctx(content);
-		//ctx.Parse(content);
-		while (1) {
+		ctx.Parse(content);
+		/*while (1) {
 			SC::Token curT = ctx.GetNextToken();
 			if (curT.IsValid())
 				printf("%s\n", curT.ToStdString().c_str());
 			else
 				break;
 
-		}
+		}*/
 	}
+
+	SC::Finish_AST_Gen();
 	return 0;
 }
 

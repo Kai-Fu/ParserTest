@@ -197,6 +197,9 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	}
 
 	Token ret = Token::sInvalid;
+	if (*mCurParsingPtr == '\0') 
+		return Token::sInvalid;  // Reach the end of the file
+	
 	// Now it is expecting a token.
 	//
 	if (_isFirstN_Equal(mCurParsingPtr, "++") ||
@@ -361,7 +364,8 @@ Token CompilingContext::PeekNextToken(int next_i)
 			mBufferedToken.push_back(ret);
 		}
 		else {
-			AddErrorMessage(Token(NULL, 0, mCurParsingLOC, Token::kUnknown), errMsg);
+			if (!errMsg.empty())
+				AddErrorMessage(Token(NULL, 0, mCurParsingLOC, Token::kUnknown), errMsg);
 			break;
 		}
 	}
@@ -512,7 +516,7 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	}
 
 	curT = context.GetNextToken();
-	if (!curT.IsValid() || !curT.GetType() != Token::kIdentifier) {
+	if (!curT.IsValid() || curT.GetType() != Token::kIdentifier) {
 		context.AddErrorMessage(curT, "Invalid structure name.");
 		return NULL;
 	}
@@ -526,12 +530,6 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	curT = context.GetNextToken();
 	if (!curT.IsValid() || !curT.IsEqual("{")) {
 		context.AddErrorMessage(curT, "\"{\" is expected after defining a structure.");
-		return NULL;
-	}
-
-	curT = context.GetNextToken();
-	if (!curT.IsValid()) {
-		context.AddErrorMessage(curT, "Invalid token expected.");
 		return NULL;
 	}
 
@@ -553,7 +551,18 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 			pStructDef->AddElement(exp->GetVarName(vi).ToStdString(), exp->GetVarType(), exp->GetStructDef());
 		}
 		delete exp;
-	} while (context.PeekNextToken(0).IsValid() && context.PeekNextToken(0).IsEqual("}"));
+
+		if (context.PeekNextToken(0).IsEqual("}")) {
+			context.GetNextToken(); // eat "}"
+			break;
+		}
+	} while (context.PeekNextToken(0).IsValid());
+
+	curT = context.GetNextToken();
+	if (!curT.IsEqual(";")) {
+		context.AddErrorMessage(curT, "\";\" is expected.");
+		succeed = false;
+	}
 
 	if (!succeed || pStructDef->GetElementCount() == 0) {
 		delete pStructDef;
@@ -570,7 +579,7 @@ void Exp_StructDef::AddElement(const std::string& varName, VarType type, Exp_Str
 	Element elem;
 	elem.isStruct = (type == VarType::kStructure);
 	elem.name = varName;
-	elem.type = (type == VarType::kStructure ? (void*)type : (void*)pStructDef);
+	elem.type = (type == VarType::kStructure ? (void*)pStructDef : (void*)type);
 	mElements.push_back(elem);
 }
 
@@ -653,7 +662,7 @@ bool CompilingContext::IsStructDefinePartten()
 	if (t1.GetType() != Token::kIdentifier)
 		return false;
 
-	if (t2.IsEqual("{"))
+	if (!t2.IsEqual("{"))
 		return false;
 
 	return true;
@@ -686,9 +695,9 @@ Exp_VarDef* Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, 
 	Token curT = context.GetNextToken();
 	VarType varType = VarType::kInvalid;
 
-	if (!curT.IsValid() ||
-		!IsBuiltInType(curT, &varType) ||
-		!curDomain->IsTypeDefined(curT.ToStdString())) {
+	if (!curT.IsValid() || 
+		(!IsBuiltInType(curT, &varType) &&
+		!curDomain->IsTypeDefined(curT.ToStdString()))) {
 		context.AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
 		return NULL;
 	}
@@ -780,8 +789,16 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 			return false;
 	}
 	else {
-
+		Token curT = GetNextToken();
+		if (curT.IsValid())
+			AddErrorMessage(curT, "Invalid token, cannot continue parsing from here.");
+		else {
+			if (!IsEOF())
+				AddErrorMessage(curT, "Unexpected end of file");
+		}
+		return false;
 	}
+
 	return true;
 }
 
@@ -800,10 +817,10 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
 			return false;
 
 		Token endT = PeekNextToken(0);
-		if (endT.IsEqual("{"))
+		if (endT.IsEqual("}"))
 			GetNextToken(); // eat the "}"
 		else {
-			AddErrorMessage(endT, "\"{\" is expected.");
+			AddErrorMessage(endT, "\"}\" is expected.");
 			return false;
 		}
 	}
@@ -824,10 +841,7 @@ CodeDomain::CodeDomain(CodeDomain* parent)
 
 CodeDomain::~CodeDomain()
 {
-	std::hash_map<std::string, Exp_StructDef*>::iterator it_struct = mDefinedStructures.begin();
-	for (; it_struct != mDefinedStructures.end(); ++it_struct) 
-		delete it_struct->second;
-	
+
 	std::vector<Expression*>::iterator it_exp = mExpressions.begin();
 	for (; it_exp != mExpressions.end(); ++it_exp) 
 		delete *it_exp;

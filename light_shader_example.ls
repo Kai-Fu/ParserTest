@@ -5,11 +5,12 @@
 different comments.
 */
 
-1234  abcdf.dfe  123.456f
+// 1234  abcdf.dfe  123.456f
 
 struct TestStruct1
 {
-	float3 a;
+	float3 a; // comment test
+	/* This is commnent  */
 	int2 b;
 };
 
@@ -45,4 +46,8 @@ void ComputeLighting(TestStruct1& input, TestStruct2& output)
 }
 
 */
-*/
+
+TestStruct1 myStruct001;
+
+// Bad struct defination
+//BadTestStruct myStruct002;
