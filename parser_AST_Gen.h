@@ -11,6 +11,7 @@ namespace SC {
 	class Token;
 	struct TypeDesc;
 	class Exp_VarDef;
+	class Exp_ValueEval;
 
 	enum KeyWord {
 		kStructDef,
@@ -139,17 +140,17 @@ namespace SC {
 	{
 	private:
 		Token mVarName;
-		DataBlock* mpDataBlk;
+		Exp_ValueEval* mpInitValue;
 		VarType mVarType;
 		Exp_StructDef* mpStructDef;
 
 	public:
-		Exp_VarDef(VarType type, const Token& var, DataBlock* pData);
+		Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue);
 		virtual ~Exp_VarDef();
 		static bool Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit, std::vector<Exp_VarDef*>& out_defs);
 
 		void SetStructDef(Exp_StructDef* pStruct);
-		DataBlock* GetVarDataBlock();
+		Exp_ValueEval* GetVarInitExp();
 		Token GetVarName() const;
 		VarType GetVarType() const;
 		Exp_StructDef* GetStructDef();
@@ -305,13 +306,7 @@ namespace SC {
 
 		bool ParseSingleExpression(CodeDomain* curDomain);
 		bool ParseCodeDomain(CodeDomain* curDomain);
-		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.
-		//
-		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
-		// Complex expression means it contains any simple expression and binary operation.
-		//
-		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain);
-
+		
 		Token ScanForToken(std::string& errorMsg);
 		bool ExpectAndEat(const char* str);
 
@@ -327,6 +322,12 @@ namespace SC {
 
 		bool Parse(const char* content);
 
+		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.
+		//
+		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
+		// Complex expression means it contains any simple expression and binary operation.
+		//
+		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken);
 
 	};
 } // namespace SC

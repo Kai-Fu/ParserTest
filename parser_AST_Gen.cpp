@@ -7,6 +7,42 @@ namespace SC {
 Token Token::sInvalid = Token(NULL, 0, 0, Token::kUnknown);
 Token Token::sEOF = Token(NULL, -1, -1, Token::kUnknown);
 
+static std::hash_map<std::string, TypeDesc> s_BuiltInTypes;
+static std::hash_map<std::string, KeyWord> s_KeyWords;
+
+struct TypeDesc {
+	VarType type;
+	int elemCnt;
+	bool isInt;
+
+	TypeDesc() {type = VarType::kInvalid; elemCnt = 0; isInt = false;}
+	TypeDesc(VarType tp, int cnt, bool i) {type = tp; elemCnt = cnt; isInt = i;}
+};
+
+void Initialize_AST_Gen()
+{
+	s_BuiltInTypes["float"] = TypeDesc(kFloat, 1, false);
+	s_BuiltInTypes["float2"] = TypeDesc(kFloat2, 2, false);
+	s_BuiltInTypes["float3"] = TypeDesc(kFloat3, 3, false);
+	s_BuiltInTypes["float4"] = TypeDesc(kFloat4, 4, false);
+
+	s_BuiltInTypes["int"] = TypeDesc(kInt, 1, true);
+	s_BuiltInTypes["int2"] = TypeDesc(kInt2, 2, true);
+	s_BuiltInTypes["int3"] = TypeDesc(kInt3, 3, true);
+	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 4, true);
+
+	s_KeyWords["struct"] = kStructDef;
+	s_KeyWords["if"] = kIf;
+	s_KeyWords["else"] = kElse;
+	s_KeyWords["for"] = kFor;
+}
+
+void Finish_AST_Gen()
+{
+	s_BuiltInTypes.clear();
+	s_KeyWords.clear();
+}
+
 Token::Token()
 {
 	*this = sInvalid;
@@ -388,42 +424,6 @@ Token CompilingContext::PeekNextToken(int next_i)
 		return mErrorMessages.empty() ? Token::sEOF : Token::sInvalid;
 }
 
-struct TypeDesc {
-	VarType type;
-	int elemCnt;
-	bool isInt;
-
-	TypeDesc() {type = VarType::kInvalid; elemCnt = 0; isInt = false;}
-	TypeDesc(VarType tp, int cnt, bool i) {type = tp; elemCnt = cnt; isInt = i;}
-};
-
-static std::hash_map<std::string, TypeDesc> s_BuiltInTypes;
-static std::hash_map<std::string, KeyWord> s_KeyWords;
-
-void Initialize_AST_Gen()
-{
-	s_BuiltInTypes["float"] = TypeDesc(kFloat, 1, false);
-	s_BuiltInTypes["float2"] = TypeDesc(kFloat2, 1, false);
-	s_BuiltInTypes["float3"] = TypeDesc(kFloat3, 1, false);
-	s_BuiltInTypes["float4"] = TypeDesc(kFloat4, 1, false);
-
-	s_BuiltInTypes["int"] = TypeDesc(kInt, 1, true);
-	s_BuiltInTypes["int2"] = TypeDesc(kInt2, 1, true);
-	s_BuiltInTypes["int3"] = TypeDesc(kInt3, 1, true);
-	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 1, true);
-
-	s_KeyWords["struct"] = kStructDef;
-	s_KeyWords["if"] = kIf;
-	s_KeyWords["else"] = kElse;
-	s_KeyWords["for"] = kFor;
-}
-
-void Finish_AST_Gen()
-{
-	s_BuiltInTypes.clear();
-	s_KeyWords.clear();
-}
-
 bool IsBuiltInType(const Token& token, TypeDesc* out_type)
 {
 	char tempString[MAX_TOKEN_LENGTH];
@@ -750,12 +750,14 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool al
 
 		// Test if the coming token is "=", which indicates the variable initialization.
 		//
-		DataBlock* pInitData = NULL;
+		Exp_ValueEval* pInitValue = NULL;
 		if (allowInit && context.PeekNextToken(0).IsEqual("=")) {
-			// TODO: invoken the ParseExpression function to handle it.
+			context.GetNextToken(); // Eat the "="
+			// Handle the variable initialization
+			pInitValue = context.ParseComplexExpression(curDomain, ";");
 		}
 
-		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitData);
+		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitValue);
 		if (varType == VarType::kStructure)
 			ret->SetStructDef(pStructDef);
 
@@ -819,12 +821,13 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 	else {
 
 		// Try to parse a complex expression
-		Exp_ValueEval* valueExp = ParseComplexExpression(curDomain);
+		Exp_ValueEval* valueExp = ParseComplexExpression(curDomain, ";");
 		if (!valueExp) {
 			Token curT = PeekNextToken(0);
 			AddErrorMessage(curT, "Unexpected end of file");
 			return false;
 		}
+		GetNextToken(); // Eat the ";"
 		curDomain->AddExpression(valueExp);
 	}
 
@@ -928,18 +931,18 @@ Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName)
 		return mpParentDomain->GetVarDefExpByName(varName);
 }
 
-Exp_VarDef::Exp_VarDef(VarType type, const Token& var, DataBlock* pData)
+Exp_VarDef::Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue)
 {
 	mVarType = type;
 	mpStructDef = NULL;
 	mVarName = var;
-	mpDataBlk = pData;
+	mpInitValue = pInitValue;
 }
 
 Exp_VarDef::~Exp_VarDef()
 {
-	if (mpDataBlk)
-		delete mpDataBlk;
+	if (mpInitValue)
+		delete mpInitValue;
 }
 
 void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
@@ -947,9 +950,9 @@ void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
 	mpStructDef = pStruct;
 }
 
-DataBlock* Exp_VarDef::GetVarDataBlock()
+Exp_ValueEval* Exp_VarDef::GetVarInitExp()
 {
-	return mpDataBlk;
+	return mpInitValue;
 }
 
 Token Exp_VarDef::GetVarName() const
@@ -1027,32 +1030,19 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			if (!ExpectAndEat("(")) return NULL;
 
 			std::auto_ptr<Exp_ValueEval> exp[4];
-			int i = 0;
+			
 			bool succeed = false;
 			Token lastT;
-			for (; i < tpDesc.elemCnt; ++i) {
-				exp[i].reset(ParseComplexExpression(curDomain));
-				if (i == (tpDesc.elemCnt - 1)) {
-					lastT = PeekNextToken(0);
-					if (lastT.IsEqual(")")) {
-						GetNextToken(); // Eat ")"
-						succeed = true;
-					}
-					else
-						succeed = false;
-				}
-				else 
-					if (!exp[i].get() && !ExpectAndEat(",")) return NULL;
+			for (int i = 0; i < tpDesc.elemCnt; ++i) {
+				exp[i].reset(ParseComplexExpression(curDomain, i == (tpDesc.elemCnt - 1) ? ")" : ","));
+				if (!exp[i].get()) return NULL;
+				GetNextToken(); // Eat the end token(")" or ",")
 			}
 
-			if (!succeed) {
-				AddErrorMessage(lastT, "Expect \")\".");
-				return NULL;
-			}
-			else {
-				Exp_ValueEval* expArray[4] = {exp[0].get(), exp[1].get(), exp[2].get(), exp[3].get()};
-				result = new Exp_BuiltInInitializer(expArray, tpDesc.elemCnt, tpDesc.type);
-			}
+			Exp_ValueEval* expArray[4] = {exp[0].get(), exp[1].get(), exp[2].get(), exp[3].get()};
+			for (int i = 0; i < tpDesc.elemCnt; ++i)
+				exp[i].release();
+			result = new Exp_BuiltInInitializer(expArray, tpDesc.elemCnt, tpDesc.type);
 		}
 		else if (curDomain->IsVariableDefined(curT.ToStdString(), true)) {
 			// Return a value ref expression
@@ -1085,7 +1075,7 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 	return result;
 }
 
-Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
+Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken)
 {
 	Exp_ValueEval* simpleExp0 = ParseSimpleExpression(curDomain);
 	if (!simpleExp0) {
@@ -1094,14 +1084,16 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
 		return NULL;
 	}
 
-	Token curT = GetNextToken();
-	if (curT.IsEqual(";")) {
+	Token curT = PeekNextToken(0);
+	if (curT.IsEqual(pEndToken)) {
 		return simpleExp0;
 	}
 	if (curT.GetType() != Token::kBinaryOp) {
 		AddErrorMessage(curT, "Expect a binary operator.");
 		return NULL;
 	}
+	GetNextToken(); // Eat the binary operator
+
 	int op0_level = curT.GetBinaryOpLevel();
 	std::string op0_str = curT.ToStdString();
 
@@ -1112,25 +1104,27 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
 		return NULL;
 	}
 
+	Token nextT = PeekNextToken(0);
 	// Get the next token to decide if the next binary operator is in high level of priority
-	Token nextT = GetNextToken();
-	if (nextT.IsEqual(";")) {
+	if (nextT.IsEqual(pEndToken)) {
 		// we are done for this complex value expression, return it.
 		Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
 		return pBinaryOp;
 	}
 	else if (nextT.GetType() == Token::kBinaryOp) {
+
+		GetNextToken(); // Eat the binary operator
 		int op1_level = nextT.GetBinaryOpLevel();
 		std::string op1_str = nextT.ToStdString();
 
 		if (op1_level > op0_level) {
-			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain);
+			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
 			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
 			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
 			return pBinaryOp0;
 		}
 		else {
-			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain);
+			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
 			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
 			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
 			return pBinaryOp1;

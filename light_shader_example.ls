@@ -22,6 +22,7 @@ int myIntParam2;
 float3 myTestVar0;
 
 myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
+int3 myInt3Param2 = int3(1, 2, 3);
 
 /*
 int3 myInt3Param2 = int3(1, 2, 3);
