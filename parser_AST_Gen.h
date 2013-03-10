@@ -9,6 +9,8 @@ namespace SC {
 
 
 	class Token;
+	struct TypeDesc;
+	class Exp_VarDef;
 
 	enum KeyWord {
 		kStructDef,
@@ -20,7 +22,7 @@ namespace SC {
 	void Initialize_AST_Gen();
 	void Finish_AST_Gen();
 
-	bool IsBuiltInType(const Token& token, VarType* out_type = NULL);
+	bool IsBuiltInType(const Token& token, TypeDesc* out_type = NULL);
 	bool IsKeyWord(const Token& token, KeyWord* out_key = NULL);
 
 
@@ -53,6 +55,7 @@ namespace SC {
 		Type mType;
 	public:
 		static Token sInvalid;
+		static Token sEOF;
 	public:
 		Token();
 		Token(const char* p, int num, int line, Type tp);
@@ -63,6 +66,7 @@ namespace SC {
 		Type GetType() const;
 
 		bool IsValid() const;
+		bool IsEOF() const;
 		bool IsEqual(const char* dest) const;
 		bool IsEqual(const Token& dest) const;
 		void ToAnsiString(char* dest) const;
@@ -112,7 +116,7 @@ namespace SC {
 		CodeDomain* mpParentDomain;
 
 		std::hash_map<std::string, Exp_StructDef*> mDefinedStructures;
-		std::hash_map<std::string, Token> mDefinedVariables;
+		std::hash_map<std::string, Exp_VarDef*> mDefinedVariables;
 
 		std::vector<Expression*> mExpressions;
 
@@ -124,30 +128,29 @@ namespace SC {
 		void AddDefinedType(Exp_StructDef* pStructDef);
 		bool IsTypeDefined(const std::string& typeName);
 
-		void AddDefinedVariable(const Token& t);
+		void AddDefinedVariable(const Token& t, Exp_VarDef* pDef);
 		bool IsVariableDefined(const std::string& varName, bool includeParent);
 
-		Exp_StructDef* GetStructDefineByName(const std::string& name);
+		Exp_StructDef* GetStructDefineByName(const std::string& structName);
+		Exp_VarDef* GetVarDefExpByName(const std::string& varName);
 	};
 
 	class Exp_VarDef : public Expression
 	{
 	private:
-		std::vector<std::pair<Token, DataBlock*> > mVarDefs;
+		Token mVarName;
+		DataBlock* mpDataBlk;
 		VarType mVarType;
 		Exp_StructDef* mpStructDef;
 
 	public:
-		Exp_VarDef(VarType type);
+		Exp_VarDef(VarType type, const Token& var, DataBlock* pData);
 		virtual ~Exp_VarDef();
-		static Exp_VarDef* Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit);
+		static bool Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit, std::vector<Exp_VarDef*>& out_defs);
 
 		void SetStructDef(Exp_StructDef* pStruct);
-		// return variable index in this VarDef expression
-		int AddVariable(const Token& var, DataBlock* pData = NULL);
-		int GetVariableCnt() const;
-		DataBlock* GetVarDataBlock(int idx);
-		Token GetVarName(int idx) const;
+		DataBlock* GetVarDataBlock();
+		Token GetVarName() const;
 		VarType GetVarType() const;
 		Exp_StructDef* GetStructDef();
 	};
@@ -185,22 +188,28 @@ namespace SC {
 	{
 	private:
 		double mValue;
+		bool mIsFromFloat;
 
 	public:
-		Exp_Constant(double v);
+		Exp_Constant(double v, bool f);
 		virtual ~Exp_Constant();
 
 		double GetValue() const;
+		virtual VarType GetValueType();
 	};
 
 	class Exp_VariableRef : public Exp_ValueEval
 	{
 	private:
 		Token mVariable;
-		CodeDomain* mpDomain;
-		int mSwizzle[4];
+		Exp_VarDef* mpDef;
 
+	public:
+		Exp_VariableRef(Token t, Exp_VarDef* pDef);
+		virtual ~Exp_VariableRef();
+		Exp_StructDef* GetStructDef();
 
+		virtual VarType GetValueType();
 	};
 
 	class Exp_BuiltInInitializer : public Exp_ValueEval
@@ -208,6 +217,12 @@ namespace SC {
 	private:
 		Exp_ValueEval* mpSubExprs[4];
 		VarType mType;
+
+	public:
+		Exp_BuiltInInitializer(Exp_ValueEval** pExp, int cnt, VarType tp);
+		virtual ~Exp_BuiltInInitializer();
+
+		virtual VarType GetValueType();
 	};
 
 	class Exp_UnaryOp : public Exp_ValueEval
@@ -215,6 +230,12 @@ namespace SC {
 	private:
 		std::string mOpType;
 		Exp_ValueEval* mpExpr;
+
+	public:
+		Exp_UnaryOp(const std::string& op, Exp_ValueEval* pExp);
+		virtual ~Exp_UnaryOp();
+
+		virtual VarType GetValueType();
 	};
 
 	class Exp_BinaryOp : public Exp_ValueEval
@@ -278,6 +299,7 @@ namespace SC {
 		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain);
 
 		Token ScanForToken(std::string& errorMsg);
+		bool ExpectAndEat(const char* str);
 
 	public:
 		CompilingContext(const char* content);

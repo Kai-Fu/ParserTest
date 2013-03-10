@@ -16,7 +16,9 @@ struct TestStruct1
 };
 
 int myIntParam1;
-float3 myTestVar0;
+float3 myTestVar0 = float3(0.1, 0.2, 0.3);
+
+
 
 /*
 int3 myInt3Param2 = int3(1, 2, 3);

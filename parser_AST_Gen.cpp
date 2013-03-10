@@ -4,7 +4,8 @@
 
 namespace SC {
 
-Token Token::sInvalid = Token(NULL, 0, -1, Token::kUnknown);
+Token Token::sInvalid = Token(NULL, 0, 0, Token::kUnknown);
+Token Token::sEOF = Token(NULL, -1, -1, Token::kUnknown);
 
 Token::Token()
 {
@@ -74,7 +75,12 @@ Token::Type Token::GetType() const
 
 bool Token::IsValid() const
 {
-	return (mNumOfChar > 0 && mpData != NULL);
+	return (mpData != NULL);
+}
+
+bool Token::IsEOF() const
+{
+	return (mNumOfChar == -1);
 }
 
 bool Token::IsEqual(const char* dest) const
@@ -380,20 +386,29 @@ Token CompilingContext::PeekNextToken(int next_i)
 		return Token::sInvalid;
 }
 
-static std::hash_map<std::string, VarType> s_BuiltInTypes;
+struct TypeDesc {
+	VarType type;
+	int elemCnt;
+	bool isInt;
+
+	TypeDesc() {type = VarType::kInvalid; elemCnt = 0; isInt = false;}
+	TypeDesc(VarType tp, int cnt, bool i) {type = tp; elemCnt = cnt; isInt = i;}
+};
+
+static std::hash_map<std::string, TypeDesc> s_BuiltInTypes;
 static std::hash_map<std::string, KeyWord> s_KeyWords;
 
 void Initialize_AST_Gen()
 {
-	s_BuiltInTypes["float"] = kFloat;
-	s_BuiltInTypes["float2"] = kFloat2;
-	s_BuiltInTypes["float3"] = kFloat3;
-	s_BuiltInTypes["float4"] = kFloat4;
+	s_BuiltInTypes["float"] = TypeDesc(kFloat, 1, false);
+	s_BuiltInTypes["float2"] = TypeDesc(kFloat2, 1, false);
+	s_BuiltInTypes["float3"] = TypeDesc(kFloat3, 1, false);
+	s_BuiltInTypes["float4"] = TypeDesc(kFloat4, 1, false);
 
-	s_BuiltInTypes["int"] = kInt;
-	s_BuiltInTypes["int2"] = kInt2;
-	s_BuiltInTypes["int3"] = kInt3;
-	s_BuiltInTypes["int4"] = kInt4;
+	s_BuiltInTypes["int"] = TypeDesc(kInt, 1, true);
+	s_BuiltInTypes["int2"] = TypeDesc(kInt2, 1, true);
+	s_BuiltInTypes["int3"] = TypeDesc(kInt3, 1, true);
+	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 1, true);
 
 	s_KeyWords["struct"] = kStructDef;
 	s_KeyWords["if"] = kIf;
@@ -407,11 +422,11 @@ void Finish_AST_Gen()
 	s_KeyWords.clear();
 }
 
-bool IsBuiltInType(const Token& token, VarType* out_type)
+bool IsBuiltInType(const Token& token, TypeDesc* out_type)
 {
 	char tempString[MAX_TOKEN_LENGTH];
 	token.ToAnsiString(tempString);
-	std::hash_map<std::string, VarType>::iterator it = s_BuiltInTypes.find(tempString);
+	std::hash_map<std::string, TypeDesc>::iterator it = s_BuiltInTypes.find(tempString);
 	if (it != s_BuiltInTypes.end()) {
 		if (out_type) *out_type = it->second;
 		return true;
@@ -536,21 +551,22 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	bool succeed = true;
 	Exp_StructDef* pStructDef = new Exp_StructDef(structName, curDomain);
 	do {
-		Exp_VarDef* exp = Exp_VarDef::Parse(context, &pStructDef->mStructDomain, false);
-		if (!exp) {
+		std::vector<Exp_VarDef*> varDefs;
+		if (!Exp_VarDef::Parse(context, &pStructDef->mStructDomain, false, varDefs)) {
 			succeed = false;
 			break;
 		}
 		
-		for (int vi = 0; vi < exp->GetVariableCnt(); ++vi) {
-			if (pStructDef->mStructDomain.IsVariableDefined(exp->GetVarName(vi).ToStdString(), false)) {
-				context.AddErrorMessage(exp->GetVarName(vi), "Member variable already defined.");
+		for (int vi = 0; vi < (int)varDefs.size(); ++vi) {
+			if (pStructDef->mStructDomain.IsVariableDefined(varDefs[vi]->GetVarName().ToStdString(), false)) {
+				context.AddErrorMessage(varDefs[vi]->GetVarName(), "Member variable already defined.");
 				succeed = false;
 				break;
 			}
-			pStructDef->AddElement(exp->GetVarName(vi).ToStdString(), exp->GetVarType(), exp->GetStructDef());
+			pStructDef->AddElement(varDefs[vi]->GetVarName().ToStdString(), varDefs[vi]->GetVarType(), varDefs[vi]->GetStructDef());
+			delete varDefs[vi];
 		}
-		delete exp;
+		varDefs.clear();
 
 		if (context.PeekNextToken(0).IsEqual("}")) {
 			context.GetNextToken(); // eat "}"
@@ -688,26 +704,28 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 	return true;
 }
 
-Exp_VarDef* Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit)
+bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit, std::vector<Exp_VarDef*>& out_defs)
 {
 	Token curT = context.GetNextToken();
-	VarType varType = VarType::kInvalid;
+	TypeDesc typeDesc;
+	out_defs.clear();
 
 	if (!curT.IsValid() || 
-		(!IsBuiltInType(curT, &varType) &&
+		(!IsBuiltInType(curT, &typeDesc) &&
 		!curDomain->IsTypeDefined(curT.ToStdString()))) {
 		context.AddErrorMessage(curT, "Invalid token, must be a valid built-in type of user-defined type.");
-		return NULL;
+		return false;
 	}
 
+	VarType varType = typeDesc.type;
 	Exp_StructDef* pStructDef = NULL;
 	if (varType == VarType::kInvalid) {
 		pStructDef = curDomain->GetStructDefineByName(curT.ToStdString());
 		varType = VarType::kStructure;
 	}
 
-	Exp_VarDef* ret = new Exp_VarDef(varType);
-
+	
+	std::list<std::auto_ptr<Exp_VarDef> > tempOutDefs;
 	do {
 		curT = context.GetNextToken();
 		if (curT.GetType() != Token::kIdentifier) {
@@ -732,19 +750,16 @@ Exp_VarDef* Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, 
 			return NULL;
 		}
 
-		// Now we can accept this variable
-		//
-		if (varType == VarType::kStructure)
-			ret->SetStructDef(pStructDef);
-
-		int varIdx = ret->AddVariable(curT);
-		curDomain->AddDefinedVariable(curT);
-
 		// Test if the coming token is "=", which indicates the variable initialization.
 		//
+		DataBlock* pInitData = NULL;
 		if (allowInit && context.PeekNextToken(0).IsEqual("=")) {
 			// TODO: invoken the ParseExpression function to handle it.
 		}
+
+		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitData);
+		if (varType == VarType::kStructure)
+			ret->SetStructDef(pStructDef);
 
 		// Test is the next token is ";", which indicates the end of the variable definition expression.
 		//
@@ -752,15 +767,25 @@ Exp_VarDef* Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, 
 			context.GetNextToken(); // eat the ";"
 			break;
 		}
+
+		// Now we can accept this variable
+		//
+		tempOutDefs.push_back(std::auto_ptr<Exp_VarDef>(ret));
 		
+
 	} while (context.PeekNextToken(0).IsEqual(","));
 
-	if (ret->GetVariableCnt() > 0) 
-		return ret;
+				
+	if (!tempOutDefs.empty()) {
+		for (std::list<std::auto_ptr<Exp_VarDef> >::iterator it = tempOutDefs.begin(); it != tempOutDefs.end(); ++it) {
+			curDomain->AddDefinedVariable((*it).get()->GetVarName(), (*it).get());
+			out_defs.push_back((*it).release());
+		}
+		return true;
+	}
 	else {
 		// It shouldn't reach here because any invalid token should be detected in the code above.
 		assert(0);
-		delete ret;
 		return NULL;
 	}
 }
@@ -772,10 +797,15 @@ bool CompilingContext::IsEOF() const
 
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 {
+	if (PeekNextToken(0).IsEOF())
+		return false;
+
 	if (IsVarDefinePartten(true)) {
-		Exp_VarDef* varDef = Exp_VarDef::Parse(*this, curDomain, true);
-		if (varDef)
-			curDomain->AddExpression(varDef);
+		std::vector<Exp_VarDef*>  varDefs;
+		if (Exp_VarDef::Parse(*this, curDomain, true, varDefs)) {
+			for (int i = 0; i < (int)varDefs.size(); ++i)
+				curDomain->AddExpression(varDefs[i]);
+		}
 		else
 			return false;
 	}
@@ -787,14 +817,15 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 			return false;
 	}
 	else {
-		Token curT = GetNextToken();
-		if (curT.IsValid())
-			AddErrorMessage(curT, "Invalid token, cannot continue parsing from here.");
-		else {
-			if (!IsEOF())
-				AddErrorMessage(curT, "Unexpected end of file");
+
+		// Try to parse a complex expression
+		Exp_ValueEval* valueExp = ParseComplexExpression(curDomain);
+		if (!valueExp) {
+			Token curT = PeekNextToken(0);
+			AddErrorMessage(curT, "Unexpected end of file");
+			return false;
 		}
-		return false;
+		curDomain->AddExpression(valueExp);
 	}
 
 	return true;
@@ -862,9 +893,9 @@ bool CodeDomain::IsTypeDefined(const std::string& typeName)
 	return mDefinedStructures.find(typeName) != mDefinedStructures.end();
 }
 
-void CodeDomain::AddDefinedVariable(const Token& t)
+void CodeDomain::AddDefinedVariable(const Token& t, Exp_VarDef* pDef)
 {
-	mDefinedVariables[t.ToStdString()] = t;
+	mDefinedVariables[t.ToStdString()] = pDef;
 }
 
 bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParent)
@@ -879,24 +910,36 @@ bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParen
 		return false;
 }
 
-Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& name)
+Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& structName)
 {
-	std::hash_map<std::string, Exp_StructDef*>::iterator it = mDefinedStructures.find(name);
+	std::hash_map<std::string, Exp_StructDef*>::iterator it = mDefinedStructures.find(structName);
 	if (it != mDefinedStructures.end())
 		return it->second;
 	else 
-		return mpParentDomain->GetStructDefineByName(name);
+		return mpParentDomain->GetStructDefineByName(structName);
 }
 
-Exp_VarDef::Exp_VarDef(VarType type)
+Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName)
+{
+	std::hash_map<std::string, Exp_VarDef*>::iterator it = mDefinedVariables.find(varName);
+	if (it != mDefinedVariables.end())
+		return it->second;
+	else 
+		return mpParentDomain->GetVarDefExpByName(varName);
+}
+
+Exp_VarDef::Exp_VarDef(VarType type, const Token& var, DataBlock* pData)
 {
 	mVarType = type;
 	mpStructDef = NULL;
+	mVarName = var;
+	mpDataBlk = pData;
 }
 
 Exp_VarDef::~Exp_VarDef()
 {
-
+	if (mpDataBlk)
+		delete mpDataBlk;
 }
 
 void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
@@ -904,26 +947,14 @@ void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
 	mpStructDef = pStruct;
 }
 
-// return variable index in this VarDef expression
-int Exp_VarDef::AddVariable(const Token& var, DataBlock* pData)
+DataBlock* Exp_VarDef::GetVarDataBlock()
 {
-	mVarDefs.push_back(std::pair<Token, DataBlock*>(var, pData));
-	return (int)mVarDefs.size() - 1;
+	return mpDataBlk;
 }
 
-int Exp_VarDef::GetVariableCnt() const
+Token Exp_VarDef::GetVarName() const
 {
-	return (int)mVarDefs.size();
-}
-
-DataBlock* Exp_VarDef::GetVarDataBlock(int idx)
-{
-	return mVarDefs[idx].second;
-}
-
-Token Exp_VarDef::GetVarName(int idx) const
-{
-	return mVarDefs[idx].first;
+	return mVarName;
 }
 
 VarType Exp_VarDef::GetVarType() const
@@ -962,6 +993,19 @@ Exp_BinaryOp::~Exp_BinaryOp()
 	delete mpRightExp;
 }
 
+bool CompilingContext::ExpectAndEat(const char* str)
+{
+	Token curT = GetNextToken();
+	if (curT.IsEqual(str)) 
+		return true;
+	else {
+		std::string errMsg = str;
+		errMsg += " is expected.";
+		AddErrorMessage(curT, errMsg);
+		return false;
+	}
+}
+
 Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 {
 	Token curT = GetNextToken();
@@ -973,13 +1017,46 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 		return NULL;
 	}
 
+	Exp_ValueEval* result = NULL;
+
 	if (curT.GetType() == Token::kIdentifier) {
 		// This identifier must be a already defined variable, built-in type or constant
-		if (IsBuiltInType(curT)) {
-			// TODO: Parse and return the built-in type initializer
+		TypeDesc tpDesc;
+		if (IsBuiltInType(curT, &tpDesc)) {
+			// Parse and return the built-in type initialize
+			if (!ExpectAndEat("(")) return NULL;
+
+			std::auto_ptr<Exp_ValueEval> exp[4];
+			int i = 0;
+			bool succeed = false;
+			Token lastT;
+			for (; i < tpDesc.elemCnt; ++i) {
+				exp[i].reset(ParseComplexExpression(curDomain));
+				if (i == (tpDesc.elemCnt - 1)) {
+					lastT = PeekNextToken(0);
+					if (lastT.IsEqual(")")) {
+						GetNextToken(); // Eat ")"
+						succeed = true;
+					}
+					else
+						succeed = false;
+				}
+				else 
+					if (!exp[i].get() && !ExpectAndEat(",")) return NULL;
+			}
+
+			if (!succeed) {
+				AddErrorMessage(lastT, "Expect \")\".");
+				return NULL;
+			}
+			else {
+				Exp_ValueEval* expArray[4] = {exp[0].get(), exp[1].get(), exp[2].get(), exp[3].get()};
+				result = new Exp_BuiltInInitializer(expArray, tpDesc.elemCnt, tpDesc.type);
+			}
 		}
 		else if (curDomain->IsVariableDefined(curT.ToStdString(), true)) {
-			// TODO: Return a value ref expression
+			// Return a value ref expression
+			result = new Exp_VariableRef(curT, curDomain->GetVarDefExpByName(curT.ToStdString()));
 		}
 		else {
 			// TODO: if the identifier is a function name, it should return the function call expression
@@ -989,10 +1066,19 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 		// TODO: Generate a unary operator expression
 	}
 	else {
-		// TODO: return a constant expression
+		// return a constant expression
+		if (curT.GetType() != Token::kConstFloat && curT.GetType() != Token::kConstInt) {
+			AddErrorMessage(curT, "Unexpected token.");
+			return NULL;
+		}
+
+		result = new Exp_Constant(curT.GetConstValue(), curT.GetType() == Token::kConstFloat);
 	}
 
-	return NULL;
+	// TODO: This is not the end of simple expression, I need to check for the next token to see if it has swizzle.
+	// e.g. myVar.xyz, myVar.bgar
+
+	return result;
 }
 
 Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
@@ -1048,6 +1134,103 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain)
 	}
 
 	return NULL;
+}
+
+Exp_Constant::Exp_Constant(double v, bool f)
+{
+	mValue = v;
+	mIsFromFloat = f;
+}
+
+Exp_Constant::~Exp_Constant()
+{
+
+}
+
+double Exp_Constant::GetValue() const
+{
+	return mValue;
+}
+
+VarType Exp_Constant::GetValueType()
+{
+	return mIsFromFloat ? VarType::kFloat : VarType::kInt;
+}
+
+Exp_VariableRef::Exp_VariableRef(Token t, Exp_VarDef* pDef)
+{
+	mVariable = t;
+	mpDef = pDef;
+}
+
+Exp_VariableRef::~Exp_VariableRef()
+{
+
+}
+
+VarType Exp_VariableRef::GetValueType()
+{
+	return mpDef->GetVarType();
+}
+
+Exp_StructDef* Exp_VariableRef::GetStructDef()
+{
+	if (GetValueType() == VarType::kStructure) 
+		return mpDef->GetStructDef();
+	else
+		return NULL;
+}
+
+
+Exp_BuiltInInitializer::Exp_BuiltInInitializer(Exp_ValueEval** pExp, int cnt, VarType tp)
+{
+	mType = tp;
+	mpSubExprs[0] = NULL;
+	mpSubExprs[1] = NULL;
+	mpSubExprs[2] = NULL;
+	mpSubExprs[3] = NULL;
+
+	int aCnt = cnt > 4 ? 4 : cnt;
+	for (int i = 0; i < aCnt; ++i) {
+		mpSubExprs[i] = pExp[i];
+	}
+}
+
+Exp_BuiltInInitializer::~Exp_BuiltInInitializer()
+{
+	for (int i = 0; i < 4; ++i) {
+		if (mpSubExprs[i])
+			delete mpSubExprs[i];
+	}
+}
+
+VarType Exp_BuiltInInitializer::GetValueType()
+{
+	return mType;
+}
+
+Exp_UnaryOp::Exp_UnaryOp(const std::string& op, Exp_ValueEval* pExp)
+{
+	mOpType = op;
+	mpExpr = pExp;
+}
+
+Exp_UnaryOp::~Exp_UnaryOp()
+{
+	if (mpExpr)
+		delete mpExpr;
+}
+
+VarType Exp_UnaryOp::GetValueType()
+{
+	// TODO: will unary operation change the value type?
+	return mpExpr->GetValueType();
+}
+
+
+VarType Exp_BinaryOp::GetValueType()
+{
+	return mpLeftExp->GetValueType();
 }
 
 } // namespace SC
