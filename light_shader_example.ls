@@ -11,14 +11,17 @@ struct TestStruct1
 {
 	float3 a; // comment test
 	/* This is commnent  */
-	int2 b;
+	int2 b, c, d;
+	//float c;
 	//BadType c;
 };
 
 int myIntParam1;
-float3 myTestVar0 = float3(0.1, 0.2, 0.3);
+int myIntParam2;
+//int3  myIntParam1;
+float3 myTestVar0;
 
-
+myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
 
 /*
 int3 myInt3Param2 = int3(1, 2, 3);

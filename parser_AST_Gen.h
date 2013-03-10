@@ -252,6 +252,20 @@ namespace SC {
 		virtual VarType GetValueType();
 	};
 
+	// A DotOp is either to access the structure member or to perform swizzle for a built-in type
+	//
+	class Exp_DotOp : public Exp_ValueEval
+	{
+	private:
+		std::string mOpStr;
+		Exp_ValueEval* mpExp;
+	public:
+		Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp);
+		virtual ~Exp_DotOp();
+
+		virtual VarType GetValueType();
+	};
+
 	class FunctionDomain : public CodeDomain
 	{
 	private:

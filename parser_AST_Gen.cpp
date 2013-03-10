@@ -178,7 +178,7 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 				}
 				if (*mCurParsingPtr == '\0') {
 					errorMsg = "Comments not ended - unexpected end of file.";
-					return Token::sInvalid;
+					return Token::sEOF;
 				}
 				else {
 					++mCurParsingPtr; // Skip "/"
@@ -204,14 +204,15 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 
 	Token ret = Token::sInvalid;
 	if (*mCurParsingPtr == '\0') 
-		return Token::sInvalid;  // Reach the end of the file
+		return Token::sEOF;  // Reach the end of the file
 	
 	// Now it is expecting a token.
 	//
 	if (_isFirstN_Equal(mCurParsingPtr, "++") ||
 		_isFirstN_Equal(mCurParsingPtr, "--") ||
 		_isFirstN_Equal(mCurParsingPtr, "||") ||
-		_isFirstN_Equal(mCurParsingPtr, "&&")) {
+		_isFirstN_Equal(mCurParsingPtr, "&&") ||
+		_isFirstN_Equal(mCurParsingPtr, "==") ) {
 
 		ret = Token(mCurParsingPtr, 2, mCurParsingLOC, Token::kBinaryOp);
 		mCurParsingPtr += 2;
@@ -221,7 +222,8 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 			 _isFirstN_Equal(mCurParsingPtr, "*") ||
 			 _isFirstN_Equal(mCurParsingPtr, "/") ||
 			 _isFirstN_Equal(mCurParsingPtr, "|") ||
-			 _isFirstN_Equal(mCurParsingPtr, "&")) {
+			 _isFirstN_Equal(mCurParsingPtr, "&") ||
+			 _isFirstN_Equal(mCurParsingPtr, "=") ) {
 
 		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kBinaryOp);
 		++mCurParsingPtr;
@@ -383,7 +385,7 @@ Token CompilingContext::PeekNextToken(int next_i)
 		return *it;
 	}
 	else 
-		return Token::sInvalid;
+		return mErrorMessages.empty() ? Token::sEOF : Token::sInvalid;
 }
 
 struct TypeDesc {
@@ -558,11 +560,6 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 		}
 		
 		for (int vi = 0; vi < (int)varDefs.size(); ++vi) {
-			if (pStructDef->mStructDomain.IsVariableDefined(varDefs[vi]->GetVarName().ToStdString(), false)) {
-				context.AddErrorMessage(varDefs[vi]->GetVarName(), "Member variable already defined.");
-				succeed = false;
-				break;
-			}
 			pStructDef->AddElement(varDefs[vi]->GetVarName().ToStdString(), varDefs[vi]->GetVarType(), varDefs[vi]->GetStructDef());
 			delete varDefs[vi];
 		}
@@ -695,7 +692,7 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 	if (!t0.IsValid() || !t1.IsValid())
 		return false;
 
-	if (t0.GetType() != Token::kIdentifier)
+	if (t0.GetType() != Token::kIdentifier || IsKeyWord(t0))
 		return false;
 
 	if (t1.GetType() != Token::kIdentifier)
@@ -726,6 +723,7 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool al
 
 	
 	std::list<std::auto_ptr<Exp_VarDef> > tempOutDefs;
+	bool bContinue = false;;
 	do {
 		curT = context.GetNextToken();
 		if (curT.GetType() != Token::kIdentifier) {
@@ -761,33 +759,35 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool al
 		if (varType == VarType::kStructure)
 			ret->SetStructDef(pStructDef);
 
-		// Test is the next token is ";", which indicates the end of the variable definition expression.
-		//
-		if (context.PeekNextToken(0).IsEqual(";")) {
-			context.GetNextToken(); // eat the ";"
-			break;
-		}
-
 		// Now we can accept this variable
 		//
 		tempOutDefs.push_back(std::auto_ptr<Exp_VarDef>(ret));
-		
 
-	} while (context.PeekNextToken(0).IsEqual(","));
-
-				
-	if (!tempOutDefs.empty()) {
-		for (std::list<std::auto_ptr<Exp_VarDef> >::iterator it = tempOutDefs.begin(); it != tempOutDefs.end(); ++it) {
-			curDomain->AddDefinedVariable((*it).get()->GetVarName(), (*it).get());
-			out_defs.push_back((*it).release());
+		// Test is the next token is ";", which indicates the end of the variable definition expression.
+		//
+		if (context.PeekNextToken(0).IsEqual(";")) {
+			break;
 		}
-		return true;
+
+		bContinue = context.PeekNextToken(0).IsEqual(",");
+		if (bContinue) context.GetNextToken(); // eat the ","
+	} while (bContinue);
+
+	if (context.PeekNextToken(0).IsEqual(";")) {
+		context.GetNextToken(); // eat the ";"
+				
+		if (!tempOutDefs.empty()) {
+			for (std::list<std::auto_ptr<Exp_VarDef> >::iterator it = tempOutDefs.begin(); it != tempOutDefs.end(); ++it) {
+				curDomain->AddDefinedVariable((*it).get()->GetVarName(), (*it).get());
+				out_defs.push_back((*it).release());
+			}
+			return true;
+		}
+		else
+			return false;
 	}
-	else {
-		// It shouldn't reach here because any invalid token should be detected in the code above.
-		assert(0);
-		return NULL;
-	}
+	else 
+		return false;
 }
 
 bool CompilingContext::IsEOF() const
@@ -907,7 +907,7 @@ bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParen
 			return false;
 	}
 	else
-		return false;
+		return true;
 }
 
 Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& structName)
@@ -1075,6 +1075,10 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 		result = new Exp_Constant(curT.GetConstValue(), curT.GetType() == Token::kConstFloat);
 	}
 
+	if (!result) {
+		AddErrorMessage(curT, "Unexpected token.");
+		return NULL;
+	}
 	// TODO: This is not the end of simple expression, I need to check for the next token to see if it has swizzle.
 	// e.g. myVar.xyz, myVar.bgar
 
