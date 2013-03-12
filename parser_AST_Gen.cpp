@@ -1015,12 +1015,13 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 	if (curT.GetType() != Token::kIdentifier && 
 		curT.GetType() != Token::kUnaryOp && 
 		curT.GetType() != Token::kConstFloat &&
-		curT.GetType() != Token::kConstInt) {
+		curT.GetType() != Token::kConstInt &&
+		curT.GetType() != Token::kOpenParenthesis) {
 		AddErrorMessage(curT, "Invalid token for value expression.");
 		return NULL;
 	}
 
-	Exp_ValueEval* result = NULL;
+	std::auto_ptr<Exp_ValueEval> result;
 
 	if (curT.GetType() == Token::kIdentifier) {
 		// This identifier must be a already defined variable, built-in type or constant
@@ -1042,18 +1043,29 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			Exp_ValueEval* expArray[4] = {exp[0].get(), exp[1].get(), exp[2].get(), exp[3].get()};
 			for (int i = 0; i < tpDesc.elemCnt; ++i)
 				exp[i].release();
-			result = new Exp_BuiltInInitializer(expArray, tpDesc.elemCnt, tpDesc.type);
+			result.reset(new Exp_BuiltInInitializer(expArray, tpDesc.elemCnt, tpDesc.type));
 		}
 		else if (curDomain->IsVariableDefined(curT.ToStdString(), true)) {
 			// Return a value ref expression
-			result = new Exp_VariableRef(curT, curDomain->GetVarDefExpByName(curT.ToStdString()));
+			result.reset(new Exp_VariableRef(curT, curDomain->GetVarDefExpByName(curT.ToStdString())));
 		}
 		else {
 			// TODO: if the identifier is a function name, it should return the function call expression
 		}
 	}
 	else if (curT.GetType() == Token::kUnaryOp) {
-		// TODO: Generate a unary operator expression
+		// Generate a unary operator expression
+		Exp_ValueEval* ret = ParseSimpleExpression(curDomain);
+		if (ret)
+			result.reset(new Exp_UnaryOp(curT.ToStdString(), ret));
+	}
+	else if (curT.GetType() == Token::kOpenParenthesis) {
+		// This expression starts with "(", so it needs to end up with ")".
+		Exp_ValueEval* ret = ParseComplexExpression(curDomain, ")");
+		if (ret) {
+			result.reset(ret);
+			GetNextToken(); // Eat the ")"
+		}
 	}
 	else {
 		// return a constant expression
@@ -1062,17 +1074,28 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			return NULL;
 		}
 
-		result = new Exp_Constant(curT.GetConstValue(), curT.GetType() == Token::kConstFloat);
+		result.reset(new Exp_Constant(curT.GetConstValue(), curT.GetType() == Token::kConstFloat));
 	}
 
-	if (!result) {
+	if (!result.get()) {
 		AddErrorMessage(curT, "Unexpected token.");
 		return NULL;
 	}
-	// TODO: This is not the end of simple expression, I need to check for the next token to see if it has swizzle.
-	// e.g. myVar.xyz, myVar.bgar
+	// This is not the end of simple expression, I need to check for the next token to see if it has swizzle or structure member access.
+	// e.g. myVar.xyz, myVar.myVar
+	while (PeekNextToken(0).IsEqual(".")) {
+		// Need to deal with dot operator
+		GetNextToken();  // Eat the "."
+		curT = GetNextToken();
+		if (curT.GetType() != Token::kIdentifier) {
+			AddErrorMessage(curT, "Unexpected token, identifier is expected.");
+			return NULL;
+		}
 
-	return result;
+		result.reset(new Exp_DotOp(curT.ToStdString(), result.release()));
+	}
+
+	return result.release();
 }
 
 Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken)
@@ -1119,15 +1142,19 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 
 		if (op1_level > op0_level) {
 			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
-			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
-			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
-			return pBinaryOp0;
+			if (simpleExp2) {
+				Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
+				Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
+				return pBinaryOp0;
+			}
 		}
 		else {
 			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
-			Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
-			Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
-			return pBinaryOp1;
+			if (simpleExp2) {
+				Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
+				Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
+				return pBinaryOp1;
+			}
 		}
 	}
 
@@ -1229,6 +1256,23 @@ VarType Exp_UnaryOp::GetValueType()
 VarType Exp_BinaryOp::GetValueType()
 {
 	return mpLeftExp->GetValueType();
+}
+
+Exp_DotOp::Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp)
+{
+	mOpStr = opStr;
+	mpExp = pExp;
+}
+
+Exp_DotOp::~Exp_DotOp()
+{
+	if (mpExp)
+		delete mpExp;
+}
+
+VarType Exp_DotOp::GetValueType()
+{
+	return VarType::kInvalid;
 }
 
 } // namespace SC

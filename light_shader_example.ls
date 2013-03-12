@@ -16,19 +16,26 @@ struct TestStruct1
 	//BadType c;
 };
 
+TestStruct1 myStructVar0;
+
 int myIntParam1;
 int myIntParam2;
 //int3  myIntParam1;
 float3 myTestVar0;
 
 myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
-int3 myInt3Param2 = int3(1, 2, 3);
+int3 myInt3Param2 = int3(1, 2, 3) + myIntParam1 * (myStructVar0.a + float3(3,4,5));
+
+
+myInt3Param2.yxwz.rgba;
 
 /*
 int3 myInt3Param2 = int3(1, 2, 3);
 
 float myFloatParam1 = 0.1234;
 float4 myFloatParam2 = float4(0.1, 0.2, 0.3, 0.4);
+
+myFloatParam2.yxwz;
 
 
 // These variables are shader based, which means their modification will be reflected by every
