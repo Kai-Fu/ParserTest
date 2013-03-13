@@ -16,6 +16,11 @@ struct TestStruct1
 	//BadType c;
 };
 
+float simpleFunc(float2 a, float b)
+{
+	int c = a + b;
+}
+
 TestStruct1 myStructVar0;
 
 int myIntParam1;

@@ -824,7 +824,9 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 		return false;
 	
 	if (IsFunctionDefinePartten()) {
-		// TODO: Parse the function declaration.
+		// Parse the function declaration.
+		if (!Exp_FunctionDecl::Parse(*this, curDomain))
+			return false;
 	}
 	else if (IsVarDefinePartten(true)) {
 		std::vector<Exp_VarDef*>  varDefs;
@@ -864,7 +866,12 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
 		return false;
 
 	bool multiExp = PeekNextToken(0).IsEqual("{");
+
 	if (multiExp) {
+		if (curDomain == mRootCodeDomain) {
+			AddErrorMessage(PeekNextToken(0), "Code domain is not valid in global domain.");
+			return false;
+		}
 		GetNextToken(); // eat the "{"
 
 		CodeDomain* childDomain = new CodeDomain(curDomain);
@@ -941,7 +948,7 @@ void CodeDomain::AddDefinedFunction(Exp_FunctionDecl* pFunc)
 {
 	std::string funcName = pFunc->GetFunctionName();
 	std::hash_map<std::string, Exp_FunctionDecl*>::iterator it = mDefinedFunctions.find(funcName);
-	if (it != mDefinedFunctions.end())
+	if (it == mDefinedFunctions.end())
 		mDefinedFunctions[funcName] = pFunc;
 	else
 		assert(0); 
@@ -1051,7 +1058,7 @@ bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType,
 {
 	TypeDesc retType;
 	Token curT = GetNextToken();
-	if (!IsBuiltInType(curT, &retType) || !curDomain->IsTypeDefined(curT.ToStdString())) {
+	if (!IsBuiltInType(curT, &retType) && !curDomain->IsTypeDefined(curT.ToStdString())) {
 		AddErrorMessage(curT, "Expect built-in type or a predefined structure.");
 		return false;
 	}
@@ -1385,19 +1392,17 @@ Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 	return NULL;
 }
 
-Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
+bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 {
-	Token curT = context.GetNextToken();
-	TypeDesc retType;
 	std::auto_ptr<Exp_FunctionDecl> result(new Exp_FunctionDecl(curDomain));
 	// The first token needs to be the returned type of the function
 	//
 	if (!context.ExpectTypeAndEat(curDomain, result->mReturnType, result->mpRetStruct))
-		return NULL;
+		return false;
 
 	// The second token should be the function name
 	//
-	curT = context.GetNextToken();
+	Token curT = context.GetNextToken();
 	bool alreadyDefined = (curDomain->IsFunctionDefined(curT.ToStdString()));
 	result->mFuncName = curT.ToStdString();
 
@@ -1405,21 +1410,25 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 	// e.g. (Type0 arg0, Type1 arg1)
 	//
 	if (!context.ExpectAndEat("("))
-		return NULL;
+		return false;
 	do {
 		Exp_FunctionDecl::ArgDesc argDesc;
 		if (!context.ExpectTypeAndEat(curDomain, argDesc.type, argDesc.pStructDef))
-			return NULL;
+			return false;
 		Token argT = context.GetNextToken();
 		for (int i = 0; i < (int)result->mArgments.size(); ++i) {
 			if (argT.IsEqual(result->mArgments[i].token)) {
 				context.AddErrorMessage(curT, "Function argument redefined.");
-				return NULL;
+				return false;
 			}
 		}
 		argDesc.token = argT;
 		argDesc.isByRef = false; // TODO: handle passing-by-reference argument
 		result->mArgments.push_back(argDesc);
+
+		if (context.PeekNextToken(0).IsEqual(","))
+			context.GetNextToken(); // Eat the ","
+
 	} while (!context.PeekNextToken(0).IsEqual(")"));
 
 	context.GetNextToken(); // Eat the ")"
@@ -1430,28 +1439,38 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 		assert(pFuncDef);
 		if (!result->HasSamePrototype(*pFuncDef)) {
 			context.AddErrorMessage(curT, "Function declared with different prototype.");
-			return NULL;
+			return false;
 		}
 		result.reset(NULL);
 	}
-	else
+	else {
 		pFuncDef = result.get();
+		curDomain->AddDefinedFunction(result.release());
+	}
 
 	if (context.PeekNextToken(0).IsEqual("{")) {
 		// The function body is expected, if there is already a function body for this function, kick it out.
 		if (alreadyDefined) {
 			if (!pFuncDef->mExpressions.empty()) {
 				context.AddErrorMessage(curT, "Function already has a body.");
-				return NULL;
+				return false;
 			}
+		}
+
+		for (int i = 0; i < (int)pFuncDef->mArgments.size(); ++i) {
+			Exp_VarDef* pExp = new Exp_VarDef(pFuncDef->mArgments[i].type, pFuncDef->mArgments[i].token, NULL);
+			if (pFuncDef->mArgments[i].type == VarType::kStructure)
+				pExp->SetStructDef(pFuncDef->mArgments[i].pStructDef);
+			pFuncDef->AddExpression(pExp);
+			pFuncDef->AddDefinedVariable(pFuncDef->mArgments[i].token, pExp);
 		}
 
 		// Now parse the function body
 		if (!context.ParseCodeDomain(pFuncDef))
-			return NULL;
+			return false;
 	}
 
-	return alreadyDefined ? pFuncDef : result.release();
+	return true;
 }
 
 } // namespace SC

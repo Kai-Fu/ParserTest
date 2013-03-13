@@ -296,7 +296,7 @@ namespace SC {
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
 
-		static Exp_FunctionDecl* Parse(CompilingContext& context, CodeDomain* curDomain);
+		static bool Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
 	class Exp_FunctionCall : public Exp_ValueEval
