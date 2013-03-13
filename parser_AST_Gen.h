@@ -110,14 +110,16 @@ namespace SC {
 	
 	class Exp_StructDef;
 	class CompilingContext;
+	class Exp_FunctionDecl;
 
 	class CodeDomain : public Expression
 	{
-	private:
+	protected:
 		CodeDomain* mpParentDomain;
 
 		std::hash_map<std::string, Exp_StructDef*> mDefinedStructures;
 		std::hash_map<std::string, Exp_VarDef*> mDefinedVariables;
+		std::hash_map<std::string, Exp_FunctionDecl*> mDefinedFunctions;
 
 		std::vector<Expression*> mExpressions;
 
@@ -132,8 +134,13 @@ namespace SC {
 		void AddDefinedVariable(const Token& t, Exp_VarDef* pDef);
 		bool IsVariableDefined(const std::string& varName, bool includeParent);
 
+		void AddDefinedFunction(Exp_FunctionDecl* pFunc);
+		bool IsFunctionDefined(const std::string& funcName);
+
 		Exp_StructDef* GetStructDefineByName(const std::string& structName);
 		Exp_VarDef* GetVarDefExpByName(const std::string& varName);
+		Exp_FunctionDecl* GetFunctionDeclByName(const std::string& funcName);
+
 	};
 
 	class Exp_VarDef : public Expression
@@ -156,7 +163,7 @@ namespace SC {
 		Exp_StructDef* GetStructDef();
 	};
 
-	class Exp_StructDef : public Expression
+	class Exp_StructDef : public CodeDomain
 	{
 	private:
 		struct Element {
@@ -166,7 +173,6 @@ namespace SC {
 		};
 		std::string mStructName;
 		std::vector<Element> mElements;
-		CodeDomain mStructDomain;
 	public:
 		Exp_StructDef(std::string name, CodeDomain* parentDomain);
 		virtual ~Exp_StructDef();
@@ -267,18 +273,62 @@ namespace SC {
 		virtual VarType GetValueType();
 	};
 
-	class FunctionDomain : public CodeDomain
+	class Exp_FunctionDecl : public CodeDomain
+	{
+	public:
+		struct ArgDesc {
+			bool isByRef;
+			VarType type;
+			Exp_StructDef* pStructDef;
+			Token token;
+		};
+
+	private:
+		VarType mReturnType;
+		Exp_StructDef* mpRetStruct;
+		std::string mFuncName;
+		std::vector<ArgDesc> mArgments;
+	public:
+		Exp_FunctionDecl(CodeDomain* parent);
+		virtual ~Exp_FunctionDecl();
+		const std::string GetFunctionName() const;
+		int GetArgumentCnt() const;
+		ArgDesc* GetArgumentDesc(int idx);
+		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
+
+		static Exp_FunctionDecl* Parse(CompilingContext& context, CodeDomain* curDomain);
+	};
+
+	class Exp_FunctionCall : public Exp_ValueEval
 	{
 	private:
-		Token mReturnType;
-		Token mFuncName;
-		std::vector<Token> mArgments;
+		struct InputArgDesc {
+			Exp_ValueEval* pArgValue;
+			bool isByRef;
+		};
+		std::vector<InputArgDesc> mInputArgs;
+	public:
+		Exp_FunctionCall(const std::string& opStr, Exp_ValueEval* pExp);
+		virtual ~Exp_FunctionCall();
+
+		virtual VarType GetValueType();
+	};
+
+	class Exp_If : public Expression
+	{
+	private:
+		CodeDomain mIfDomain;
+		CodeDomain mElseDomain;
+	public:
+		Exp_If();
+		virtual ~Exp_If();
+
 	};
 
 	class RootDomain : public CodeDomain
 	{
 	private:
-		std::vector<FunctionDomain*> mFunctions;
+		
 	
 	public:
 		RootDomain();
@@ -303,12 +353,12 @@ namespace SC {
 	private:
 		bool IsVarDefinePartten(bool allowInit);
 		bool IsStructDefinePartten();
+		bool IsFunctionDefinePartten();
 
 		bool ParseSingleExpression(CodeDomain* curDomain);
-		bool ParseCodeDomain(CodeDomain* curDomain);
+		
 		
 		Token ScanForToken(std::string& errorMsg);
-		bool ExpectAndEat(const char* str);
 
 	public:
 		CompilingContext(const char* content);
@@ -319,9 +369,12 @@ namespace SC {
 
 		Token GetNextToken();
 		Token PeekNextToken(int next_i);
+		bool ExpectAndEat(const char* str);
+		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, Exp_StructDef*& outStructDef);
 
 		bool Parse(const char* content);
 
+		bool ParseCodeDomain(CodeDomain* curDomain);
 		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.
 		//
 		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
