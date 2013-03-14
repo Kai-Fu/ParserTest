@@ -35,6 +35,7 @@ void Initialize_AST_Gen()
 	s_KeyWords["if"] = kIf;
 	s_KeyWords["else"] = kElse;
 	s_KeyWords["for"] = kFor;
+	s_KeyWords["return"] = kFor;
 }
 
 void Finish_AST_Gen()
@@ -377,7 +378,7 @@ bool CompilingContext::Parse(const char* content)
 		delete mRootCodeDomain;
 
 	mRootCodeDomain = new RootDomain();
-	while (ParseCodeDomain(mRootCodeDomain));
+	while (ParseCodeDomain(mRootCodeDomain, NULL));
 
 	return IsEOF() && mErrorMessages.empty();
 }
@@ -818,12 +819,14 @@ bool CompilingContext::IsEOF() const
 	return (*mCurParsingPtr == '\0');
 }
 
-bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
+bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* endT)
 {
 	if (PeekNextToken(0).IsEOF())
 		return false;
 	
-	if (IsFunctionDefinePartten()) {
+	if (endT && PeekNextToken(0).IsEqual(endT))
+		return false;
+	else if (IsFunctionDefinePartten()) {
 		// Parse the function declaration.
 		if (!Exp_FunctionDecl::Parse(*this, curDomain))
 			return false;
@@ -845,22 +848,39 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain)
 			return false;
 	}
 	else {
-
-		// Try to parse a complex expression
-		Exp_ValueEval* valueExp = ParseComplexExpression(curDomain, ";");
-		if (!valueExp) {
-			Token curT = PeekNextToken(0);
-			AddErrorMessage(curT, "Unexpected end of file");
+		if (curDomain == mRootCodeDomain) {
+			AddErrorMessage(PeekNextToken(0), "Value based expression is not allowed in global domain.");
 			return false;
 		}
-		GetNextToken(); // Eat the ";"
-		curDomain->AddExpression(valueExp);
+
+		if (PeekNextToken(0).IsEqual("return")) {
+			GetNextToken(); // Eat the "return"
+			Exp_ValueEval* pValue = NULL;
+			if (!PeekNextToken(0).IsEqual(";")) {
+				pValue = ParseComplexExpression(curDomain, ";");
+				if (!pValue) return false;
+				GetNextToken(); // Eat the ";"
+			}
+			Exp_FuncRet* pRetExp = new Exp_FuncRet(pValue);
+			curDomain->AddExpression(pRetExp);
+		}
+		else {
+			// Try to parse a complex expression
+			Exp_ValueEval* valueExp = ParseComplexExpression(curDomain, ";");
+			if (!valueExp) {
+				Token curT = PeekNextToken(0);
+				AddErrorMessage(curT, "Unexpected end of file");
+				return false;
+			}
+			GetNextToken(); // Eat the ";"
+			curDomain->AddExpression(valueExp);
+		}
 	}
 
 	return true;
 }
 
-bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
+bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain, const char* endT)
 {
 	if (IsEOF())
 		return false;
@@ -876,7 +896,7 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
 
 		CodeDomain* childDomain = new CodeDomain(curDomain);
 		curDomain->AddExpression(childDomain);
-		if (!ParseCodeDomain(childDomain))
+		if (!ParseCodeDomain(childDomain, "}"))
 			return false;
 
 		Token endT = PeekNextToken(0);
@@ -888,13 +908,12 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain)
 		}
 	}
 	else {
-		while (ParseSingleExpression(curDomain));
+		while (ParseSingleExpression(curDomain, endT));
 		if (!mErrorMessages.empty())
 			return false;
 	}
 
-	// The EOF is expected here since all the errors should be caught before and here it should reach the end of file
-	return IsEOF();
+	return true;
 }
 
 CodeDomain::CodeDomain(CodeDomain* parent)
@@ -1446,6 +1465,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	else {
 		pFuncDef = result.get();
 		curDomain->AddDefinedFunction(result.release());
+		curDomain->AddExpression(pFuncDef);
 	}
 
 	if (context.PeekNextToken(0).IsEqual("{")) {
@@ -1466,11 +1486,30 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		}
 
 		// Now parse the function body
-		if (!context.ParseCodeDomain(pFuncDef))
+		if (!context.ParseCodeDomain(pFuncDef, NULL))
 			return false;
 	}
 
 	return true;
+}
+
+Exp_FuncRet::Exp_FuncRet(Exp_ValueEval* pRet)
+{
+	mpRetValue = pRet;
+}
+
+Exp_FuncRet::~Exp_FuncRet()
+{
+	if (mpRetValue)
+		delete mpRetValue;
+}
+
+VarType Exp_FuncRet::GetValueType()
+{
+	if (mpRetValue)
+		return mpRetValue->GetValueType();
+	else
+		return VarType::kVoid;
 }
 
 } // namespace SC

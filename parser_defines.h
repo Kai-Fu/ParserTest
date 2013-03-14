@@ -15,6 +15,7 @@ namespace SC {
 		kInt3,
 		kInt4,
 		kStructure,
+		kVoid,
 		kInvalid
 		};
 } // namespace SC

@@ -17,7 +17,8 @@ namespace SC {
 		kStructDef,
 		kIf,
 		kElse,
-		kFor
+		kFor,
+		kReturn
 	};
 
 	void Initialize_AST_Gen();
@@ -299,6 +300,17 @@ namespace SC {
 		static bool Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
+	class Exp_FuncRet : public Exp_ValueEval
+	{
+	private:
+		Exp_ValueEval* mpRetValue;
+	public:
+		Exp_FuncRet(Exp_ValueEval* pRet);
+		virtual ~Exp_FuncRet();
+
+		virtual VarType GetValueType();
+	};
+
 	class Exp_FunctionCall : public Exp_ValueEval
 	{
 	private:
@@ -355,7 +367,7 @@ namespace SC {
 		bool IsStructDefinePartten();
 		bool IsFunctionDefinePartten();
 
-		bool ParseSingleExpression(CodeDomain* curDomain);
+		bool ParseSingleExpression(CodeDomain* curDomain, const char* endT);
 		
 		
 		Token ScanForToken(std::string& errorMsg);
@@ -374,7 +386,7 @@ namespace SC {
 
 		bool Parse(const char* content);
 
-		bool ParseCodeDomain(CodeDomain* curDomain);
+		bool ParseCodeDomain(CodeDomain* curDomain, const char* endT);
 		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.
 		//
 		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
