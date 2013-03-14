@@ -27,8 +27,6 @@ namespace SC {
 	bool IsBuiltInType(const Token& token, TypeDesc* out_type = NULL);
 	bool IsKeyWord(const Token& token, KeyWord* out_key = NULL);
 
-
-
 	class Token
 	{
 	public:
@@ -189,7 +187,12 @@ namespace SC {
 	class Exp_ValueEval : public Expression
 	{
 	public:
-		virtual VarType GetValueType() = 0;
+		struct TypeInfo {
+			VarType type;
+			Exp_StructDef* pStructDef;
+		};
+
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg) = 0;
 	};
 
 	class Exp_Constant : public Exp_ValueEval
@@ -203,7 +206,7 @@ namespace SC {
 		virtual ~Exp_Constant();
 
 		double GetValue() const;
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_VariableRef : public Exp_ValueEval
@@ -217,7 +220,7 @@ namespace SC {
 		virtual ~Exp_VariableRef();
 		Exp_StructDef* GetStructDef();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_BuiltInInitializer : public Exp_ValueEval
@@ -230,7 +233,7 @@ namespace SC {
 		Exp_BuiltInInitializer(Exp_ValueEval** pExp, int cnt, VarType tp);
 		virtual ~Exp_BuiltInInitializer();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_UnaryOp : public Exp_ValueEval
@@ -243,7 +246,7 @@ namespace SC {
 		Exp_UnaryOp(const std::string& op, Exp_ValueEval* pExp);
 		virtual ~Exp_UnaryOp();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_BinaryOp : public Exp_ValueEval
@@ -257,7 +260,7 @@ namespace SC {
 		Exp_BinaryOp(const std::string& op, Exp_ValueEval* pLeft, Exp_ValueEval* pRight);
 		virtual ~Exp_BinaryOp();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	// A DotOp is either to access the structure member or to perform swizzle for a built-in type
@@ -271,7 +274,7 @@ namespace SC {
 		Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp);
 		virtual ~Exp_DotOp();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_FunctionDecl : public CodeDomain
@@ -308,7 +311,7 @@ namespace SC {
 		Exp_FuncRet(Exp_ValueEval* pRet);
 		virtual ~Exp_FuncRet();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_FunctionCall : public Exp_ValueEval
@@ -323,7 +326,7 @@ namespace SC {
 		Exp_FunctionCall(const std::string& opStr, Exp_ValueEval* pExp);
 		virtual ~Exp_FunctionCall();
 
-		virtual VarType GetValueType();
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
 	class Exp_If : public Expression

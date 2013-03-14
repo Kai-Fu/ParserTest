@@ -18,4 +18,8 @@ namespace SC {
 		kVoid,
 		kInvalid
 		};
+
+	bool IsBuiltInType(VarType type);
+	bool IsIntegerType(VarType type);
+	int TypeElementCnt(VarType type);
 } // namespace SC

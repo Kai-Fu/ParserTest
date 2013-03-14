@@ -853,6 +853,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 			return false;
 		}
 
+		Exp_ValueEval* pNewExp = NULL;
 		if (PeekNextToken(0).IsEqual("return")) {
 			GetNextToken(); // Eat the "return"
 			Exp_ValueEval* pValue = NULL;
@@ -861,20 +862,21 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 				if (!pValue) return false;
 				GetNextToken(); // Eat the ";"
 			}
-			Exp_FuncRet* pRetExp = new Exp_FuncRet(pValue);
-			curDomain->AddExpression(pRetExp);
+			pNewExp = new Exp_FuncRet(pValue);
 		}
 		else {
 			// Try to parse a complex expression
-			Exp_ValueEval* valueExp = ParseComplexExpression(curDomain, ";");
-			if (!valueExp) {
+			pNewExp = ParseComplexExpression(curDomain, ";");
+			if (!pNewExp) {
 				Token curT = PeekNextToken(0);
 				AddErrorMessage(curT, "Unexpected end of file");
 				return false;
 			}
 			GetNextToken(); // Eat the ";"
-			curDomain->AddExpression(valueExp);
 		}
+
+		if (pNewExp)
+			curDomain->AddExpression(pNewExp);
 	}
 
 	return true;
@@ -1258,9 +1260,11 @@ double Exp_Constant::GetValue() const
 	return mValue;
 }
 
-VarType Exp_Constant::GetValueType()
+bool Exp_Constant::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	return mIsFromFloat ? VarType::kFloat : VarType::kInt;
+	outType.type = mIsFromFloat ? VarType::kFloat : VarType::kInt;
+	outType.pStructDef = NULL;
+	return true;
 }
 
 Exp_VariableRef::Exp_VariableRef(Token t, Exp_VarDef* pDef)
@@ -1274,14 +1278,16 @@ Exp_VariableRef::~Exp_VariableRef()
 
 }
 
-VarType Exp_VariableRef::GetValueType()
+bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	return mpDef->GetVarType();
+	outType.type = mpDef->GetVarType();
+	outType.pStructDef = NULL;
+	return true;
 }
 
 Exp_StructDef* Exp_VariableRef::GetStructDef()
 {
-	if (GetValueType() == VarType::kStructure) 
+	if (mpDef) 
 		return mpDef->GetStructDef();
 	else
 		return NULL;
@@ -1310,9 +1316,39 @@ Exp_BuiltInInitializer::~Exp_BuiltInInitializer()
 	}
 }
 
-VarType Exp_BuiltInInitializer::GetValueType()
+bool Exp_BuiltInInitializer::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	return mType;
+	int ElemCnt = TypeElementCnt(mType);
+	int ElemCntGiven = 0;
+	bool hasFloat = false;
+	bool SubExpCnt = 0;
+	for (int i = 0; i < 4; ++i) {
+		Exp_ValueEval* curExp = mpSubExprs[i];
+		if (curExp) {
+			TypeInfo typeInfo;
+			if (!curExp->CheckSemantic(typeInfo, errMsg, warnMsg)) 
+				return false;
+			if (!IsBuiltInType(typeInfo.type)) {
+				errMsg = "Must be built-in type.";
+				return false;
+			}
+			if (!IsIntegerType(typeInfo.type))
+				hasFloat = true;
+			ElemCntGiven += TypeElementCnt(typeInfo.type);
+		}
+	}
+
+	if (ElemCntGiven != ElemCnt) {
+		errMsg = "Bad built-in type initialization.";
+		return false;
+	}
+
+	if (IsIntegerType(mType)) {
+		if (hasFloat) warnMsg.push_back("Integer implicitly converted to float type.");
+	}
+	outType.type = mType;
+	outType.pStructDef = NULL;
+	return true;
 }
 
 Exp_UnaryOp::Exp_UnaryOp(const std::string& op, Exp_ValueEval* pExp)
@@ -1327,16 +1363,49 @@ Exp_UnaryOp::~Exp_UnaryOp()
 		delete mpExpr;
 }
 
-VarType Exp_UnaryOp::GetValueType()
+bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	// TODO: will unary operation change the value type?
-	return mpExpr->GetValueType();
+	// will unary operation change the value type?
+	return mpExpr->CheckSemantic(outType, errMsg, warnMsg);
 }
 
 
-VarType Exp_BinaryOp::GetValueType()
+bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	return mpLeftExp->GetValueType();
+	TypeInfo leftType, rightType;
+	if (!mpLeftExp->CheckSemantic(leftType, errMsg, warnMsg) || !mpLeftExp->CheckSemantic(rightType, errMsg, warnMsg))
+		return false;
+	if (leftType.type == VarType::kStructure || rightType.type == VarType::kStructure) {
+		if (mOperator == "=") {
+			if (leftType.pStructDef != rightType.pStructDef) {
+				errMsg = "Cannot assign from different structure.";
+				return false;
+			}
+			else {
+				outType.pStructDef = leftType.pStructDef;
+				outType.type = VarType::kStructure;
+				return true;
+			}
+		}
+		else {
+			errMsg = "Cannot do binary operation between structure or built-in types.";
+			return false;
+		}
+	}
+	else {
+
+		if (leftType.type != rightType.type) {
+			if (TypeElementCnt(leftType.type) > TypeElementCnt(rightType.type)) {
+				errMsg = "Cannot do binary operation with right argument of less elements.";
+				return false;
+			}
+			if (IsIntegerType(leftType.type) && !IsIntegerType(rightType.type))
+				warnMsg.push_back("Integer implicitly converted to float type.");
+		}
+		outType.pStructDef = NULL;
+		outType.type = leftType.type;
+		return true;
+	}
 }
 
 Exp_DotOp::Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp)
@@ -1351,9 +1420,34 @@ Exp_DotOp::~Exp_DotOp()
 		delete mpExp;
 }
 
-VarType Exp_DotOp::GetValueType()
+bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	return VarType::kInvalid;
+	TypeInfo parentType;
+	if (!mpExp->CheckSemantic(parentType, errMsg, warnMsg))
+		return false;
+	if (parentType.type == VarType::kStructure) {
+		if (parentType.pStructDef->IsVariableDefined(mOpStr, false)) {
+			Exp_VarDef* pDef = parentType.pStructDef->GetVarDefExpByName(mOpStr);
+			assert(pDef);
+			outType.type = pDef->GetVarType();
+			if (outType.type == VarType::kStructure)
+				outType.pStructDef = pDef->GetStructDef();
+			else
+				outType.pStructDef = NULL;
+			return true;
+		}
+		else {
+			errMsg = "Invalid structure member name.";
+			return false;
+		}
+	}
+	else {
+		// TODO: 
+		outType.type = VarType::kInvalid;
+		outType.pStructDef = NULL;
+		return false;
+
+	}
 }
 
 Exp_FunctionDecl::Exp_FunctionDecl(CodeDomain* parent) :
@@ -1504,12 +1598,15 @@ Exp_FuncRet::~Exp_FuncRet()
 		delete mpRetValue;
 }
 
-VarType Exp_FuncRet::GetValueType()
+bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
 	if (mpRetValue)
-		return mpRetValue->GetValueType();
-	else
-		return VarType::kVoid;
+		return mpRetValue->CheckSemantic(outType, errMsg, warnMsg);
+	else {
+		outType.type = VarType::kVoid;
+		outType.pStructDef = NULL;
+		return true;
+	}
 }
 
 } // namespace SC
