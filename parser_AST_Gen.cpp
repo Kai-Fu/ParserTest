@@ -377,8 +377,9 @@ bool CompilingContext::Parse(const char* content)
 	if (mRootCodeDomain)
 		delete mRootCodeDomain;
 
+	PushStatusCode(kAlllowStructDef | kAlllowFuncDef);
 	mRootCodeDomain = new RootDomain();
-	while (ParseCodeDomain(mRootCodeDomain, NULL));
+	while (ParseSingleExpression(mRootCodeDomain, NULL));
 
 	return IsEOF() && mErrorMessages.empty();
 }
@@ -545,96 +546,46 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	}
 	std::string structName = curT.ToStdString();
 
-	curT = context.GetNextToken();
+	curT = context.PeekNextToken(0);
 	if (!curT.IsValid() || !curT.IsEqual("{")) {
 		context.AddErrorMessage(curT, "\"{\" is expected after defining a structure.");
 		return NULL;
 	}
 
-	bool succeed = true;
-	Exp_StructDef* pStructDef = new Exp_StructDef(structName, curDomain);
-	do {
-		std::vector<Exp_VarDef*> varDefs;
-		if (!Exp_VarDef::Parse(context, pStructDef, false, varDefs)) {
-			succeed = false;
-			break;
-		}
-		
-		for (int vi = 0; vi < (int)varDefs.size(); ++vi) {
-			pStructDef->AddElement(varDefs[vi]->GetVarName().ToStdString(), varDefs[vi]->GetVarType(), varDefs[vi]->GetStructDef());
-			delete varDefs[vi];
-		}
-		varDefs.clear();
+	bool succeed = false;
+	std::auto_ptr<Exp_StructDef> pStructDef(new Exp_StructDef(structName, curDomain));
 
-		if (context.PeekNextToken(0).IsEqual("}")) {
-			context.GetNextToken(); // eat "}"
-			break;
-		}
-	} while (context.PeekNextToken(0).IsValid());
-
+	context.PushStatusCode(CompilingContext::kAllowVarDef);
+	if (context.ParseCodeDomain(pStructDef.get(), NULL))
+		succeed = true;
+	context.PopStatusCode();
 
 	if (!succeed || pStructDef->GetElementCount() == 0) {
 		
-		delete pStructDef;
 		return NULL;
 	}
 	else {
 		curT = context.GetNextToken();
 		if (!curT.IsEqual(";")) {
 			context.AddErrorMessage(curT, "\";\" is expected.");
-			delete pStructDef;
 			return NULL;
 		}
-		curDomain->AddDefinedType(pStructDef);
-		return pStructDef;
+		curDomain->AddDefinedType(pStructDef.get());
+		return pStructDef.release();
 	}
-}
-
-void Exp_StructDef::AddElement(const std::string& varName, VarType type, Exp_StructDef* pStructDef)
-{
-	Element elem;
-	elem.isStruct = (type == VarType::kStructure);
-	elem.name = varName;
-	elem.type = (type == VarType::kStructure ? (void*)pStructDef : (void*)type);
-	mElements.push_back(elem);
 }
 
 int Exp_StructDef::GetStructSize() const
 {
 	int totalSize = 0;
-	for (size_t i = 0; i < mElements.size(); ++i) {
+	std::hash_map<std::string, Exp_VarDef*>::const_iterator it = mDefinedVariables.begin();
+	for (; it != mDefinedVariables.end(); ++it) {
 		int curSize = 0;
-		if (!mElements[i].isStruct) {
-			switch ((VarType)(int)mElements[i].type)
-			{
-			case VarType::kFloat:
-				curSize = sizeof(Float);
-				break;
-			case VarType::kFloat2:
-				curSize = sizeof(Float)*2;
-				break;
-			case VarType::kFloat3:
-				curSize = sizeof(Float)*3;
-				break;
-			case VarType::kFloat4:
-				curSize = sizeof(Float)*4;
-				break;
-			case VarType::kInt:
-				curSize = sizeof(int);
-				break;
-			case VarType::kInt2:
-				curSize = sizeof(int)*2;
-				break;
-			case VarType::kInt3:
-				curSize = sizeof(int)*3;
-				break;
-			case VarType::kInt4:
-				curSize = sizeof(int)*4;
-				break;
-			}
-		}
+		Exp_VarDef* pVarDef = it->second;
+		if (pVarDef->GetVarType() == VarType::kStructure) 
+			curSize = pVarDef->GetStructDef()->GetStructSize();
 		else
-			curSize = ((Exp_StructDef*)mElements[i].type)->GetStructSize();
+			curSize = TypeSize(pVarDef->GetVarType());
 
 		totalSize += curSize;
 	}
@@ -644,7 +595,7 @@ int Exp_StructDef::GetStructSize() const
 
 int Exp_StructDef::GetElementCount() const
 {
-	return (int)mElements.size();
+	return (int)mDefinedVariables.size();
 }
 
 const std::string& Exp_StructDef::GetStructureName() const
@@ -652,9 +603,16 @@ const std::string& Exp_StructDef::GetStructureName() const
 	return mStructName;
 }
 
-VarType Exp_StructDef::GetElementType(int idx) const
+VarType Exp_StructDef::GetElementType(int idx, const Exp_StructDef* &outStructDef) const
 {
-	return ((VarType)(int)mElements[idx].type);
+	std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(idx);
+	if (it == mIdx2ValueDefs.end())
+		return VarType::kInvalid;
+	else {
+		VarType ret = it->second->GetVarType();
+		outStructDef = it->second->GetStructDef();
+		return ret;
+	}
 }
 
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
@@ -819,6 +777,24 @@ bool CompilingContext::IsEOF() const
 	return (*mCurParsingPtr == '\0');
 }
 
+void CompilingContext::PushStatusCode(int code)
+{
+	mStatusCode.push_back(code);
+}
+
+int CompilingContext::GetStatusCode()
+{
+	if (mStatusCode.empty())
+		return 0;
+	else
+		return mStatusCode.back();
+}
+
+void CompilingContext::PopStatusCode()
+{
+	mStatusCode.pop_back();
+}
+
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* endT)
 {
 	if (PeekNextToken(0).IsEOF())
@@ -826,12 +802,12 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	
 	if (endT && PeekNextToken(0).IsEqual(endT))
 		return false;
-	else if (IsFunctionDefinePartten()) {
+	else if ((GetStatusCode() & kAlllowFuncDef) && IsFunctionDefinePartten()) {
 		// Parse the function declaration.
 		if (!Exp_FunctionDecl::Parse(*this, curDomain))
 			return false;
 	}
-	else if (IsVarDefinePartten(true)) {
+	else if ((GetStatusCode() & kAllowVarDef) && IsVarDefinePartten(true)) {
 		std::vector<Exp_VarDef*>  varDefs;
 		if (Exp_VarDef::Parse(*this, curDomain, true, varDefs)) {
 			for (int i = 0; i < (int)varDefs.size(); ++i)
@@ -840,18 +816,14 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		else
 			return false;
 	}
-	else if (IsStructDefinePartten()) {
+	else if ((GetStatusCode() & kAlllowStructDef) && IsStructDefinePartten()) {
 		Exp_StructDef* structDef = Exp_StructDef::Parse(*this, curDomain);
 		if (structDef)
 			curDomain->AddExpression(structDef);
 		else
 			return false;
 	}
-	else {
-		if (curDomain == mRootCodeDomain) {
-			AddErrorMessage(PeekNextToken(0), "Value based expression is not allowed in global domain.");
-			return false;
-		}
+	else if (GetStatusCode() & kAllowValueExp) {
 
 		Exp_ValueEval* pNewExp = NULL;
 		if (PeekNextToken(0).IsEqual("return")) {
@@ -878,6 +850,14 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		if (pNewExp)
 			curDomain->AddExpression(pNewExp);
 	}
+	else {
+		if (!PeekNextToken(0).IsEOF()) {
+			AddErrorMessage(PeekNextToken(0), "Unexpected expression in current domain.");
+			return false;
+		}
+		else
+			return false;
+	}
 
 	return true;
 }
@@ -890,10 +870,6 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain, const char* endT)
 	bool multiExp = PeekNextToken(0).IsEqual("{");
 
 	if (multiExp) {
-		if (curDomain == mRootCodeDomain) {
-			AddErrorMessage(PeekNextToken(0), "Code domain is not valid in global domain.");
-			return false;
-		}
 		GetNextToken(); // eat the "{"
 
 		CodeDomain* childDomain = new CodeDomain(curDomain);
@@ -1562,6 +1538,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		curDomain->AddExpression(pFuncDef);
 	}
 
+	bool ret = true;
 	if (context.PeekNextToken(0).IsEqual("{")) {
 		// The function body is expected, if there is already a function body for this function, kick it out.
 		if (alreadyDefined) {
@@ -1580,11 +1557,14 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		}
 
 		// Now parse the function body
+		context.PushStatusCode(CompilingContext::kAlllowStructDef | CompilingContext::kAllowReturnExp | CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef | CompilingContext::kAllowVarInit);
 		if (!context.ParseCodeDomain(pFuncDef, NULL))
-			return false;
+			ret = false;
+		context.PopStatusCode();
+
 	}
 
-	return true;
+	return ret;
 }
 
 Exp_FuncRet::Exp_FuncRet(Exp_ValueEval* pRet)

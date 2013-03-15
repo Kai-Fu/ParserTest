@@ -165,23 +165,17 @@ namespace SC {
 	class Exp_StructDef : public CodeDomain
 	{
 	private:
-		struct Element {
-			bool isStruct;
-			void* type;
-			std::string name;
-		};
 		std::string mStructName;
-		std::vector<Element> mElements;
+		std::hash_map<int, Exp_VarDef*> mIdx2ValueDefs;
 	public:
 		Exp_StructDef(std::string name, CodeDomain* parentDomain);
 		virtual ~Exp_StructDef();
 		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
 
-		void AddElement(const std::string& varName, VarType type, Exp_StructDef* pStructDef);
 		int GetStructSize() const;
 		int GetElementCount() const;
 		const std::string& GetStructureName() const;
-		VarType GetElementType(int idx) const;
+		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef) const;
 	};
 
 	class Exp_ValueEval : public Expression
@@ -354,6 +348,15 @@ namespace SC {
 
 	class CompilingContext
 	{
+	public:
+		enum ParsingStatus {
+			kAllowValueExp		= 0x00000001,
+			kAllowVarInit		= 0x00000002,
+			kAllowVarDef		= 0x00000004,
+			kAllowReturnExp		= 0x00000008,
+			kAlllowStructDef	= 0x00000010,
+			kAlllowFuncDef		= 0x00000020
+		};
 	private:
 		const char* mContentPtr;
 		const char* mCurParsingPtr;
@@ -364,6 +367,7 @@ namespace SC {
 		std::list<std::pair<Token, std::string> > mErrorMessages;
 
 		RootDomain* mRootCodeDomain;
+		std::list<int> mStatusCode;
 
 	private:
 		bool IsVarDefinePartten(bool allowInit);
@@ -371,7 +375,6 @@ namespace SC {
 		bool IsFunctionDefinePartten();
 
 		bool ParseSingleExpression(CodeDomain* curDomain, const char* endT);
-		
 		
 		Token ScanForToken(std::string& errorMsg);
 
@@ -388,6 +391,10 @@ namespace SC {
 		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, Exp_StructDef*& outStructDef);
 
 		bool Parse(const char* content);
+
+		void PushStatusCode(int code);
+		int GetStatusCode();
+		void PopStatusCode();
 
 		bool ParseCodeDomain(CodeDomain* curDomain, const char* endT);
 		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.

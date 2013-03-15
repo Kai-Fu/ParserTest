@@ -4,6 +4,7 @@
 namespace SC {
 
 	typedef float Float;
+	typedef int Int;
 	
 	enum VarType {
 		kFloat,
@@ -22,4 +23,5 @@ namespace SC {
 	bool IsBuiltInType(VarType type);
 	bool IsIntegerType(VarType type);
 	int TypeElementCnt(VarType type);
+	int TypeSize(VarType type);
 } // namespace SC

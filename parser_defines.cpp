@@ -58,4 +58,27 @@ int TypeElementCnt(VarType type)
 	return 0x0ffffff;
 }
 
+int TypeSize(VarType type)
+{
+	switch (type) {
+	case kFloat:
+		return 1*sizeof(Float);
+	case kFloat2:
+		return 2*sizeof(Float);
+	case kFloat3:
+		return 3*sizeof(Float);
+	case kFloat4:
+		return 4*sizeof(Float);
+	case kInt:
+		return 1*sizeof(Int);
+	case kInt2:
+		return 2*sizeof(Int);
+	case kInt3:
+		return 3*sizeof(Int);
+	case kInt4:
+		return 4*sizeof(Int);
+	}
+	return 0;
+}
+
 } // namespace SC

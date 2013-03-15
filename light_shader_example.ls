@@ -17,6 +17,14 @@ struct TestStruct1
 };
 
 
+
+
+
+
+
+float simpleFunc(float2 a, float b)
+{
+
 TestStruct1 myStructVar0;
 
 int myIntParam1;
@@ -24,11 +32,6 @@ int myIntParam2;
 //int3  myIntParam1;
 float3 myTestVar0;
 
-
-
-
-float simpleFunc(float2 a, float b)
-{
 	int c = a + b;
 	myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
 	int3 myInt3Param2 = int3(1, 2, 3) + myIntParam1 * (myStructVar0.a + float3(3,4,5));
@@ -70,7 +73,7 @@ void ComputeLighting(TestStruct1& input, TestStruct2& output)
 
 */
 
-TestStruct1 myStruct001;
+//TestStruct1 myStruct001;
 
 // Bad struct defination
 //BadTestStruct myStruct002;
