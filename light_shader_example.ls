@@ -38,7 +38,7 @@ bTest = false;
 	myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
 	int3 myInt3Param2 = int3(1, 2, 3) + myInt3 * (myStructVar0.a + float3(3,4,5));
 	float4 myFloat4 = myInt3.yxz.rbbg;
-	myFloat4 = myInt3Param2.zyxx;
+	myFloat4 = -myInt3Param2.zyxx;
 	return c;
 }
 

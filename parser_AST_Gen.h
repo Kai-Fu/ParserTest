@@ -43,11 +43,10 @@ namespace SC {
 			kOpenBraket, // [
 			kCloseBraket, // ]
 			kBinaryOp, // +,=,*,/, etc
-			kUnaryOp, // !, ++, --, etc
+			kUnaryOp, // !,
 			kComma,
 			kSemiColon,
 			kPeriod,
-			kBang,
 			kUnknown
 		};
 	private:

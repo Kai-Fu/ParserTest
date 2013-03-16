@@ -306,7 +306,7 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 		++mCurParsingPtr;
 	}
 	else if(*mCurParsingPtr == '!') {
-		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kBang);
+		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kUnaryOp);
 		++mCurParsingPtr;
 	}
 	else {
@@ -1193,7 +1193,8 @@ bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType,
 Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 {
 	Token curT = GetNextToken();
-	if (curT.GetType() != Token::kIdentifier && 
+	if (!curT.IsEqual("-") &&
+		curT.GetType() != Token::kIdentifier && 
 		curT.GetType() != Token::kUnaryOp && 
 		curT.GetType() != Token::kConstFloat &&
 		curT.GetType() != Token::kConstInt &&
@@ -1239,7 +1240,8 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			// TODO: if the identifier is a function name, it should return the function call expression
 		}
 	}
-	else if (curT.GetType() == Token::kUnaryOp) {
+	else if (curT.GetType() == Token::kUnaryOp ||
+			 curT.IsEqual("-")) {  // Need special handling for "-" token
 		// Generate a unary operator expression
 		Exp_ValueEval* ret = ParseSimpleExpression(curDomain);
 		if (ret)
