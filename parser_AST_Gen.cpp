@@ -631,6 +631,11 @@ void CompilingContext::AddErrorMessage(const Token& token, const std::string& st
 	mErrorMessages.push_back(std::pair<Token, std::string>(token, str));
 }
 
+void CompilingContext::AddWarningMessage(const Token& token, const std::string& str)
+{
+	mWarningMessages.push_back(std::pair<Token, std::string>(token, str));
+}
+
 bool CompilingContext::IsStructDefinePartten()
 {
 	Token t0 = PeekNextToken(0);
@@ -744,12 +749,31 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 		Exp_ValueEval* pInitValue = NULL;
 		if (context.PeekNextToken(0).IsEqual("=")) {
 
+			Token firstT = context.PeekNextToken(0);
 			if (context.GetStatusCode() & CompilingContext::kAllowVarInit) {
 				context.GetNextToken(); // Eat the "="
+				if (varType == VarType::kStructure) {
+					context.AddErrorMessage(curT, "Initialization for structure variable is not supported.");
+					return false;
+				}
 				// Handle the variable initialization
 				pInitValue = context.ParseComplexExpression(curDomain, ";");
 				if (!pInitValue)
 					return false;
+				Exp_ValueEval::TypeInfo typeInfo;
+				std::string errMsg;
+				std::vector<std::string> warnMsg;
+				if (!pInitValue->CheckSemantic(typeInfo, errMsg, warnMsg)) {
+					delete pInitValue;
+					return false;
+				}
+				bool FtoI = false;
+				if (!IsAssignable(varType, typeInfo.type, FtoI)) {
+					delete pInitValue;
+					return false;
+				}
+				if (FtoI)
+					context.AddWarningMessage(firstT, "Implicit float to int conversion.");
 			}
 			else {
 				context.AddErrorMessage(curT, "Variable initialization not allowed in this domain.");
@@ -819,6 +843,8 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	if (PeekNextToken(0).IsEOF())
 		return false;
 	
+	Token firstT = PeekNextToken(0);
+
 	if (endT && PeekNextToken(0).IsEqual(endT))
 		return false;
 	else if ((GetStatusCode() & kAlllowFuncDef) && IsFunctionDefinePartten()) {
@@ -866,8 +892,19 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 			GetNextToken(); // Eat the ";"
 		}
 
-		if (pNewExp)
+		if (pNewExp) {
+			Exp_ValueEval::TypeInfo typeInfo;
+			std::string errMsg;
+			std::vector<std::string> warnMsg;
+			if (!pNewExp->CheckSemantic(typeInfo, errMsg, warnMsg)) {
+				AddErrorMessage(firstT, errMsg);
+				delete pNewExp;
+				return false;
+			}
+
 			curDomain->AddValueExpression(pNewExp);
+		}
+
 	}
 	else {
 		if (!PeekNextToken(0).IsEOF()) {
@@ -1226,58 +1263,61 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 		return NULL;
 	}
 
+	Exp_ValueEval* ret = NULL;
 	Token curT = PeekNextToken(0);
 	if (curT.IsEqual(pEndToken)) {
-		return simpleExp0;
+		ret = simpleExp0;
 	}
-	if (curT.GetType() != Token::kBinaryOp) {
-		AddErrorMessage(curT, "Expect a binary operator.");
-		return NULL;
-	}
-	GetNextToken(); // Eat the binary operator
-
-	int op0_level = curT.GetBinaryOpLevel();
-	std::string op0_str = curT.ToStdString();
-
-	Exp_ValueEval* simpleExp1 = ParseSimpleExpression(curDomain);
-	if (!simpleExp1) {
-		// Must have some error message if it failed to parse a simple expression
-		assert(!mErrorMessages.empty()); 
-		return NULL;
-	}
-
-	Token nextT = PeekNextToken(0);
-	// Get the next token to decide if the next binary operator is in high level of priority
-	if (nextT.IsEqual(pEndToken)) {
-		// we are done for this complex value expression, return it.
-		Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
-		return pBinaryOp;
-	}
-	else if (nextT.GetType() == Token::kBinaryOp) {
-
+	else {
+		if (curT.GetType() != Token::kBinaryOp) {
+			AddErrorMessage(curT, "Expect a binary operator.");
+			return NULL;
+		}
 		GetNextToken(); // Eat the binary operator
-		int op1_level = nextT.GetBinaryOpLevel();
-		std::string op1_str = nextT.ToStdString();
 
-		if (op1_level > op0_level) {
-			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
-			if (simpleExp2) {
-				Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
-				Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
-				return pBinaryOp0;
-			}
+		int op0_level = curT.GetBinaryOpLevel();
+		std::string op0_str = curT.ToStdString();
+
+		Exp_ValueEval* simpleExp1 = ParseSimpleExpression(curDomain);
+		if (!simpleExp1) {
+			// Must have some error message if it failed to parse a simple expression
+			assert(!mErrorMessages.empty()); 
+			return NULL;
 		}
-		else {
-			Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
-			if (simpleExp2) {
-				Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
-				Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
-				return pBinaryOp1;
+
+		Token nextT = PeekNextToken(0);
+		// Get the next token to decide if the next binary operator is in high level of priority
+		if (nextT.IsEqual(pEndToken)) {
+			// we are done for this complex value expression, return it.
+			Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
+			ret = pBinaryOp;
+		}
+		else if (nextT.GetType() == Token::kBinaryOp) {
+
+			GetNextToken(); // Eat the binary operator
+			int op1_level = nextT.GetBinaryOpLevel();
+			std::string op1_str = nextT.ToStdString();
+
+			if (op1_level > op0_level) {
+				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
+				if (simpleExp2) {
+					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
+					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
+					ret = pBinaryOp0;
+				}
+			}
+			else {
+				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
+				if (simpleExp2) {
+					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
+					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
+					ret = pBinaryOp1;
+				}
 			}
 		}
 	}
 
-	return NULL;
+	return ret;
 }
 
 Exp_Constant::Exp_Constant(double v, bool f)
@@ -1409,8 +1449,9 @@ bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
 	TypeInfo leftType, rightType;
-	if (!mpLeftExp->CheckSemantic(leftType, errMsg, warnMsg) || !mpLeftExp->CheckSemantic(rightType, errMsg, warnMsg))
+	if (!mpLeftExp->CheckSemantic(leftType, errMsg, warnMsg) || !mpRightExp->CheckSemantic(rightType, errMsg, warnMsg))
 		return false;
+
 	if (leftType.type == VarType::kStructure || rightType.type == VarType::kStructure) {
 		if (mOperator == "=") {
 			if (leftType.pStructDef != rightType.pStructDef) {
@@ -1486,9 +1527,17 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 			return false;
 		}
 
+		int parentElemCnt = TypeElementCnt(parentType.type);
+		for (int i = 0; i < elemCnt; ++i) {
+			if (swizzleIdx[i] >= parentElemCnt) {
+				errMsg = "Invalid swizzle expression - element out of range.";
+				return false;
+			}
+		}
+
 		outType.type = MakeType(IsIntegerType(parentType.type), elemCnt);
 		outType.pStructDef = NULL;
-		return false;
+		return true;
 
 	}
 }

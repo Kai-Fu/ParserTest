@@ -30,14 +30,15 @@ TestStruct1 myStructVar0;
 
 int myIntParam1 = 0;
 int myIntParam2;
-//int3  myIntParam1;
-float3 myTestVar0;
+int3  myInt3;
+float myTestVar0;
 bool bTest = true;
 bTest = false;
-	int c = a + b;
+	int c = b + a;
 	myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
-	int3 myInt3Param2 = int3(1, 2, 3) + myIntParam1 * (myStructVar0.a + float3(3,4,5));
-	myInt3Param2.yxwz.rgba;
+	int3 myInt3Param2 = int3(1, 2, 3) + myInt3 * (myStructVar0.a + float3(3,4,5));
+	float4 myFloat4 = myInt3.yxz.rbbg;
+	myFloat4 = myInt3Param2.zyxx;
 	return c;
 }
 

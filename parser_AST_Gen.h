@@ -384,6 +384,7 @@ namespace SC {
 
 		std::list<Token> mBufferedToken;
 		std::list<std::pair<Token, std::string> > mErrorMessages;
+		std::list<std::pair<Token, std::string> > mWarningMessages;
 
 		RootDomain* mRootCodeDomain;
 		std::list<int> mStatusCode;
@@ -402,6 +403,7 @@ namespace SC {
 		~CompilingContext();
 
 		void AddErrorMessage(const Token& token, const std::string& str);
+		void AddWarningMessage(const Token& token, const std::string& str);
 		bool IsEOF() const;
 
 		Token GetNextToken();

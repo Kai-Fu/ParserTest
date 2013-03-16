@@ -124,4 +124,33 @@ int ConvertSwizzle(const char* swizzleStr, int swizzleIdx[4])
 	return cnt;
 }
 
+bool IsAssignable(VarType dest, VarType from, bool& FtoIwarning)
+{
+	bool ret = false;
+	bool destIsI = false;
+	FtoIwarning = false;
+	if (dest == VarType::kBoolean && from == VarType::kBoolean)
+		return true;
+
+	switch (dest) {
+	case kInt:
+	case kInt2:
+	case kInt3:
+	case kInt4:
+		destIsI = true;
+	case kFloat:
+	case kFloat2:
+	case kFloat3:
+	case kFloat4:
+		ret = TypeElementCnt(dest) <= TypeElementCnt(from);
+	}
+
+	if (destIsI && !IsIntegerType(from))
+		FtoIwarning = true;
+
+	return ret;
+}
+
+
+
 } // namespace SC
