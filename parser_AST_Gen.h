@@ -296,9 +296,8 @@ namespace SC {
 	{
 	public:
 		struct ArgDesc {
+			Exp_ValueEval::TypeInfo typeInfo;
 			bool isByRef;
-			VarType type;
-			Exp_StructDef* pStructDef;
 			Token token;
 		};
 
@@ -333,13 +332,10 @@ namespace SC {
 	class Exp_FunctionCall : public Exp_ValueEval
 	{
 	private:
-		struct InputArgDesc {
-			Exp_ValueEval* pArgValue;
-			bool isByRef;
-		};
-		std::vector<InputArgDesc> mInputArgs;
+		std::vector<Exp_ValueEval*> mInputArgs;
+		Exp_FunctionDecl* mpFuncDef;
 	public:
-		Exp_FunctionCall(const std::string& opStr, Exp_ValueEval* pExp);
+		Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt);
 		virtual ~Exp_FunctionCall();
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);

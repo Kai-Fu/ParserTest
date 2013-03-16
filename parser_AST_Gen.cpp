@@ -1255,6 +1255,27 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			GetNextToken(); // Eat the ")"
 		}
 	}
+	else if (curDomain->IsFunctionDefined(curT.ToStdString())) {
+		// This should be a function call
+		if (!PeekNextToken(0).IsEqual("(")) {
+			AddErrorMessage(PeekNextToken(0), "\"(\" is expected.");
+			return false;
+		}
+		Exp_FunctionDecl* pFuncDecl = curDomain->GetFunctionDeclByName(curT.ToStdString());
+		int argCnt = pFuncDecl->GetArgumentCnt();
+		std::vector<std::auto_ptr<Exp_ValueEval> > argExp(argCnt);
+		for (int i = 0; i < argCnt; ++i) {
+			argExp[i].reset(ParseComplexExpression(curDomain, (i == (argCnt-1)) ? ")" : ","));
+			if (!argExp[i].get())
+				return false;
+			GetNextToken(); // Eat the ")" or ","
+		}
+		std::vector<Exp_ValueEval*> argExpArray(argCnt);
+		for (int i = 0; i < argCnt; ++i) {
+			argExpArray[i] = argExp[i].release();
+		}
+		result.reset(new Exp_FunctionCall(pFuncDecl, &argExpArray[0], argCnt));
+	}
 	else {
 		// return a constant expression
 		if (curT.GetType() != Token::kConstFloat && curT.GetType() != Token::kConstInt) {
@@ -1619,8 +1640,8 @@ bool Exp_FunctionDecl::HasSamePrototype(const Exp_FunctionDecl& ref) const
 		return false;
 	for (int i = 0; i < (int)mArgments.size(); ++i) {
 		if (mArgments[i].isByRef != ref.mArgments[i].isByRef ||
-			mArgments[i].type != ref.mArgments[i].type ||
-			mArgments[i].pStructDef != ref.mArgments[i].pStructDef ||
+			mArgments[i].typeInfo.type != ref.mArgments[i].typeInfo.type ||
+			mArgments[i].typeInfo.pStructDef != ref.mArgments[i].typeInfo.pStructDef ||
 			mArgments[i].token.IsEqual(ref.mArgments[i].token) )
 			return NULL;
 	}
@@ -1656,8 +1677,14 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		return false;
 	do {
 		Exp_FunctionDecl::ArgDesc argDesc;
-		if (!context.ExpectTypeAndEat(curDomain, argDesc.type, argDesc.pStructDef))
+		if (!context.ExpectTypeAndEat(curDomain, argDesc.typeInfo.type, argDesc.typeInfo.pStructDef))
 			return false;
+
+		argDesc.isByRef = false;
+		if (context.PeekNextToken(0).IsEqual("&")) {
+			context.GetNextToken();
+			argDesc.isByRef = true;
+		}
 		Token argT = context.GetNextToken();
 		for (int i = 0; i < (int)result->mArgments.size(); ++i) {
 			if (argT.IsEqual(result->mArgments[i].token)) {
@@ -1666,7 +1693,6 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 			}
 		}
 		argDesc.token = argT;
-		argDesc.isByRef = false; // TODO: handle passing-by-reference argument
 		result->mArgments.push_back(argDesc);
 
 		if (context.PeekNextToken(0).IsEqual(","))
@@ -1702,9 +1728,9 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		}
 
 		for (int i = 0; i < (int)pFuncDef->mArgments.size(); ++i) {
-			Exp_VarDef* pExp = new Exp_VarDef(pFuncDef->mArgments[i].type, pFuncDef->mArgments[i].token, NULL);
-			if (pFuncDef->mArgments[i].type == VarType::kStructure)
-				pExp->SetStructDef(pFuncDef->mArgments[i].pStructDef);
+			Exp_VarDef* pExp = new Exp_VarDef(pFuncDef->mArgments[i].typeInfo.type, pFuncDef->mArgments[i].token, NULL);
+			if (pFuncDef->mArgments[i].typeInfo.type == VarType::kStructure)
+				pExp->SetStructDef(pFuncDef->mArgments[i].typeInfo.pStructDef);
 			pFuncDef->AddVarDefExpression(pExp);
 		}
 
@@ -1760,6 +1786,46 @@ bool Exp_TrueOrFalse::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 {
 	outType.type = VarType::kBoolean;
 	outType.pStructDef = NULL;
+	return true;
+}
+
+Exp_FunctionCall::Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt)
+{
+	mpFuncDef = pFuncDef;
+	for (int i = 0; i < cnt; ++i) 
+		mInputArgs.push_back(ppArgs[i]);
+}
+
+Exp_FunctionCall::~Exp_FunctionCall()
+{
+	for (int i = 0; i < (int)mInputArgs.size(); ++i) 
+		delete mInputArgs[i];
+}
+
+bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	if (!mpFuncDef) {
+		errMsg = "Bad function call.";
+		return false;
+	}
+	int reqArgCnt = mpFuncDef->GetArgumentCnt();
+	if (reqArgCnt != mInputArgs.size()) {
+		errMsg = "Invalid function argument count.";
+		return false;
+	}
+
+	for (int i = 0; i < reqArgCnt; ++i) {
+		Exp_FunctionDecl::ArgDesc* pArgDesc = mpFuncDef->GetArgumentDesc(i);
+		TypeInfo argTypeInfo;
+		if (!mInputArgs[i]->CheckSemantic(argTypeInfo, errMsg, warnMsg))
+			return false;
+		bool FtoI = false;
+		if (!pArgDesc->typeInfo.IsAssignable(argTypeInfo, FtoI))
+			return false;
+		if (FtoI)
+			warnMsg.push_back("Implicit float to int conversion.");
+	}
+	outType.type = mpFuncDef->GetReturnType(outType.pStructDef);
 	return true;
 }
 

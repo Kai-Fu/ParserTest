@@ -23,7 +23,7 @@ struct TestStruct1
 
 
 
-float simpleFunc(float2 a, float b)
+float simpleFunc(float2& a, float b)
 {
 
 TestStruct1 myStructVar0;
