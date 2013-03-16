@@ -546,7 +546,7 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	}
 	std::string structName = curT.ToStdString();
 
-	curT = context.PeekNextToken(0);
+	curT = context.GetNextToken();
 	if (!curT.IsValid() || !curT.IsEqual("{")) {
 		context.AddErrorMessage(curT, "\"{\" is expected after defining a structure.");
 		return NULL;
@@ -556,9 +556,17 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	std::auto_ptr<Exp_StructDef> pStructDef(new Exp_StructDef(structName, curDomain));
 
 	context.PushStatusCode(CompilingContext::kAllowVarDef);
-	if (context.ParseCodeDomain(pStructDef.get(), NULL))
+	if (context.ParseCodeDomain(pStructDef.get(), "}"))
 		succeed = true;
 	context.PopStatusCode();
+
+	curT = context.PeekNextToken(0);
+	if (curT.IsEqual("}"))
+		context.GetNextToken(); // eat the "}"
+	else {
+		context.AddErrorMessage(curT, "\"}\" is expected.");
+		return NULL;
+	}
 
 	if (!succeed || pStructDef->GetElementCount() == 0) {
 		
@@ -570,7 +578,6 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 			context.AddErrorMessage(curT, "\";\" is expected.");
 			return NULL;
 		}
-		curDomain->AddDefinedType(pStructDef.get());
 		return pStructDef.release();
 	}
 }
@@ -760,7 +767,6 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool al
 				
 		if (!tempOutDefs.empty()) {
 			for (std::list<std::auto_ptr<Exp_VarDef> >::iterator it = tempOutDefs.begin(); it != tempOutDefs.end(); ++it) {
-				curDomain->AddDefinedVariable((*it).get()->GetVarName(), (*it).get());
 				out_defs.push_back((*it).release());
 			}
 			return true;
@@ -811,7 +817,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		std::vector<Exp_VarDef*>  varDefs;
 		if (Exp_VarDef::Parse(*this, curDomain, true, varDefs)) {
 			for (int i = 0; i < (int)varDefs.size(); ++i)
-				curDomain->AddExpression(varDefs[i]);
+				curDomain->AddVarDefExpression(varDefs[i]);
 		}
 		else
 			return false;
@@ -819,7 +825,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	else if ((GetStatusCode() & kAlllowStructDef) && IsStructDefinePartten()) {
 		Exp_StructDef* structDef = Exp_StructDef::Parse(*this, curDomain);
 		if (structDef)
-			curDomain->AddExpression(structDef);
+			curDomain->AddStructDefExpression(structDef);
 		else
 			return false;
 	}
@@ -848,7 +854,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		}
 
 		if (pNewExp)
-			curDomain->AddExpression(pNewExp);
+			curDomain->AddValueExpression(pNewExp);
 	}
 	else {
 		if (!PeekNextToken(0).IsEOF()) {
@@ -873,7 +879,7 @@ bool CompilingContext::ParseCodeDomain(CodeDomain* curDomain, const char* endT)
 		GetNextToken(); // eat the "{"
 
 		CodeDomain* childDomain = new CodeDomain(curDomain);
-		curDomain->AddExpression(childDomain);
+		curDomain->AddDomainExpression(childDomain);
 		if (!ParseCodeDomain(childDomain, "}"))
 			return false;
 
@@ -903,14 +909,47 @@ CodeDomain::~CodeDomain()
 {
 
 	std::vector<Expression*>::iterator it_exp = mExpressions.begin();
-	for (; it_exp != mExpressions.end(); ++it_exp) 
+	for (; it_exp != mExpressions.end(); ++it_exp) {
 		delete *it_exp;
+	}
 }
 
-void CodeDomain::AddExpression(Expression* exp)
+void CodeDomain::AddValueExpression(Exp_ValueEval* exp)
 {
-	if (exp)
+	if (exp) {
 		mExpressions.push_back(exp);
+	}
+}
+
+void CodeDomain::AddStructDefExpression(Exp_StructDef* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+		mDefinedStructures[exp->GetStructureName()] = exp;
+	}
+}
+
+void CodeDomain::AddVarDefExpression(Exp_VarDef* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+		mDefinedVariables[exp->GetVarName().ToStdString()] = exp;
+	}
+}
+
+void CodeDomain::AddFunctionDefExpression(Exp_FunctionDecl* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+		mDefinedFunctions[exp->GetFunctionName()] = exp;
+	}
+}
+
+void CodeDomain::AddDomainExpression(CodeDomain* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+	}
 }
 
 void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
@@ -921,7 +960,10 @@ void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
 
 bool CodeDomain::IsTypeDefined(const std::string& typeName)
 {
-	return mDefinedStructures.find(typeName) != mDefinedStructures.end();
+	if (mDefinedStructures.find(typeName) == mDefinedStructures.end()) 
+		return mpParentDomain ? mpParentDomain->IsTypeDefined(typeName) : false;
+	else
+		return true;
 }
 
 void CodeDomain::AddDefinedVariable(const Token& t, Exp_VarDef* pDef)
@@ -1534,8 +1576,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	}
 	else {
 		pFuncDef = result.get();
-		curDomain->AddDefinedFunction(result.release());
-		curDomain->AddExpression(pFuncDef);
+		curDomain->AddFunctionDefExpression(result.release());
 	}
 
 	bool ret = true;
@@ -1552,8 +1593,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 			Exp_VarDef* pExp = new Exp_VarDef(pFuncDef->mArgments[i].type, pFuncDef->mArgments[i].token, NULL);
 			if (pFuncDef->mArgments[i].type == VarType::kStructure)
 				pExp->SetStructDef(pFuncDef->mArgments[i].pStructDef);
-			pFuncDef->AddExpression(pExp);
-			pFuncDef->AddDefinedVariable(pFuncDef->mArgments[i].token, pExp);
+			pFuncDef->AddVarDefExpression(pExp);
 		}
 
 		// Now parse the function body

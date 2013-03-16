@@ -122,18 +122,23 @@ namespace SC {
 
 		std::vector<Expression*> mExpressions;
 
+	private:
+		void AddDefinedType(Exp_StructDef* pStructDef);
+		void AddDefinedVariable(const Token& t, Exp_VarDef* pDef);
+		void AddDefinedFunction(Exp_FunctionDecl* pFunc);
+
 	public:
 		CodeDomain(CodeDomain* parent);
 		virtual ~CodeDomain();
 
-		void AddExpression(Expression* exp);
-		void AddDefinedType(Exp_StructDef* pStructDef);
+		void AddValueExpression(Exp_ValueEval* exp);
+		void AddStructDefExpression(Exp_StructDef* exp);
+		void AddVarDefExpression(Exp_VarDef* exp);
+		void AddFunctionDefExpression(Exp_FunctionDecl* exp);
+		void AddDomainExpression(CodeDomain* exp);
+
 		bool IsTypeDefined(const std::string& typeName);
-
-		void AddDefinedVariable(const Token& t, Exp_VarDef* pDef);
 		bool IsVariableDefined(const std::string& varName, bool includeParent);
-
-		void AddDefinedFunction(Exp_FunctionDecl* pFunc);
 		bool IsFunctionDefined(const std::string& funcName);
 
 		Exp_StructDef* GetStructDefineByName(const std::string& structName);
