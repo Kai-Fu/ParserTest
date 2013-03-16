@@ -133,6 +133,8 @@ namespace SC {
 		CodeDomain(CodeDomain* parent);
 		virtual ~CodeDomain();
 
+		CodeDomain* GetParent();
+
 		void AddValueExpression(Exp_ValueEval* exp);
 		void AddStructDefExpression(Exp_StructDef* exp);
 		void AddVarDefExpression(Exp_VarDef* exp);
@@ -191,6 +193,7 @@ namespace SC {
 		struct TypeInfo {
 			VarType type;
 			Exp_StructDef* pStructDef;
+			bool IsAssignable(const TypeInfo& from, bool& FtoI);
 		};
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg) = 0;
@@ -309,6 +312,7 @@ namespace SC {
 		Exp_FunctionDecl(CodeDomain* parent);
 		virtual ~Exp_FunctionDecl();
 		const std::string GetFunctionName() const;
+		VarType GetReturnType(Exp_StructDef* &retStruct);
 		int GetArgumentCnt() const;
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;

@@ -838,6 +838,15 @@ void CompilingContext::PopStatusCode()
 	mStatusCode.pop_back();
 }
 
+bool Exp_ValueEval::TypeInfo::IsAssignable(const TypeInfo& from, bool& FtoI)
+{
+	FtoI = false;
+	if (type == VarType::kStructure)
+		return pStructDef == from.pStructDef;
+	else
+		return SC::IsAssignable(type, from.type, FtoI);
+}
+
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* endT)
 {
 	if (PeekNextToken(0).IsEOF())
@@ -871,8 +880,12 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	else if (GetStatusCode() & kAllowValueExp) {
 
 		Exp_ValueEval* pNewExp = NULL;
+		Exp_ValueEval::TypeInfo funcRetTypeInfo = {VarType::kInvalid, NULL};
 		if (PeekNextToken(0).IsEqual("return")) {
 			GetNextToken(); // Eat the "return"
+
+			Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(curDomain->GetParent());
+			assert(pFuncDecl); // return expression should be only allowed in function body.
 			Exp_ValueEval* pValue = NULL;
 			if (!PeekNextToken(0).IsEqual(";")) {
 				pValue = ParseComplexExpression(curDomain, ";");
@@ -880,6 +893,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 				GetNextToken(); // Eat the ";"
 			}
 			pNewExp = new Exp_FuncRet(pValue);
+			funcRetTypeInfo.type = pFuncDecl->GetReturnType(funcRetTypeInfo.pStructDef);
 		}
 		else {
 			// Try to parse a complex expression
@@ -893,6 +907,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		}
 
 		if (pNewExp) {
+
 			Exp_ValueEval::TypeInfo typeInfo;
 			std::string errMsg;
 			std::vector<std::string> warnMsg;
@@ -901,7 +916,17 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 				delete pNewExp;
 				return false;
 			}
+			if (funcRetTypeInfo.type != VarType::kInvalid) {
+				bool FtoI = false;
 
+				if (!funcRetTypeInfo.IsAssignable(typeInfo, FtoI)) {
+					AddErrorMessage(firstT, "Invalid return type for this function.");
+					delete pNewExp;
+					return false;
+				}
+				if (FtoI) 
+					AddWarningMessage(firstT, "Implicit float to int conversion.");
+			}
 			curDomain->AddValueExpression(pNewExp);
 		}
 
@@ -962,6 +987,11 @@ CodeDomain::~CodeDomain()
 	for (; it_exp != mExpressions.end(); ++it_exp) {
 		delete *it_exp;
 	}
+}
+
+CodeDomain* CodeDomain::GetParent()
+{
+	return mpParentDomain;
 }
 
 void CodeDomain::AddValueExpression(Exp_ValueEval* exp)
@@ -1557,6 +1587,12 @@ Exp_FunctionDecl::~Exp_FunctionDecl()
 const std::string Exp_FunctionDecl::GetFunctionName() const
 {
 	return mFuncName;
+}
+
+VarType Exp_FunctionDecl::GetReturnType(Exp_StructDef* &retStruct)
+{
+	retStruct = mpRetStruct;
+	return mReturnType;
 }
 
 int Exp_FunctionDecl::GetArgumentCnt() const
