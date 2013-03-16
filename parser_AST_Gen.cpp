@@ -892,7 +892,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 				if (!pValue) return false;
 				GetNextToken(); // Eat the ";"
 			}
-			pNewExp = new Exp_FuncRet(pValue);
+			pNewExp = new Exp_FuncRet(pFuncDecl, pValue);
 			funcRetTypeInfo.type = pFuncDecl->GetReturnType(funcRetTypeInfo.pStructDef);
 		}
 		else {
@@ -1076,7 +1076,10 @@ void CodeDomain::AddDefinedFunction(Exp_FunctionDecl* pFunc)
 bool CodeDomain::IsFunctionDefined(const std::string& funcName)
 {
 	std::hash_map<std::string, Exp_FunctionDecl*>::iterator it = mDefinedFunctions.find(funcName);
-	return (it != mDefinedFunctions.end());
+	if (it == mDefinedFunctions.end())
+		return mpParentDomain ? mpParentDomain->IsFunctionDefined(funcName) : false;
+	else
+		return  true;
 }
 
 Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& structName)
@@ -1085,7 +1088,7 @@ Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& structName)
 	if (it != mDefinedStructures.end())
 		return it->second;
 	else 
-		return mpParentDomain->GetStructDefineByName(structName);
+		return mpParentDomain ? mpParentDomain->GetStructDefineByName(structName) : NULL;
 }
 
 Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName)
@@ -1094,7 +1097,7 @@ Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName)
 	if (it != mDefinedVariables.end())
 		return it->second;
 	else 
-		return mpParentDomain->GetVarDefExpByName(varName);
+		return mpParentDomain ? mpParentDomain->GetVarDefExpByName(varName) : NULL;
 }
 
 Exp_VarDef::Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue)
@@ -1236,8 +1239,31 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			bool value = curT.IsEqual("true"); // Eat the "true" or "false"
 			result.reset(new Exp_TrueOrFalse(value));
 		}
+		else if (curDomain->IsFunctionDefined(curT.ToStdString())) {
+			// This should be a function call
+			if (!PeekNextToken(0).IsEqual("(")) {
+				AddErrorMessage(PeekNextToken(0), "\"(\" is expected.");
+				return NULL;
+			}
+			GetNextToken(); // Eat the "("
+			Exp_FunctionDecl* pFuncDecl = curDomain->GetFunctionDeclByName(curT.ToStdString());
+			int argCnt = pFuncDecl->GetArgumentCnt();
+			std::vector<std::auto_ptr<Exp_ValueEval> > argExp(argCnt);
+			for (int i = 0; i < argCnt; ++i) {
+				argExp[i].reset(ParseComplexExpression(curDomain, (i == (argCnt-1)) ? ")" : ","));
+				if (!argExp[i].get())
+					return NULL;
+				GetNextToken(); // Eat the ")" or ","
+			}
+			std::vector<Exp_ValueEval*> argExpArray(argCnt);
+			for (int i = 0; i < argCnt; ++i) {
+				argExpArray[i] = argExp[i].release();
+			}
+			result.reset(new Exp_FunctionCall(pFuncDecl, &argExpArray[0], argCnt));
+		}
 		else {
-			// TODO: if the identifier is a function name, it should return the function call expression
+			AddErrorMessage(curT, "Unexpected token.");
+			return NULL;
 		}
 	}
 	else if (curT.GetType() == Token::kUnaryOp ||
@@ -1254,27 +1280,6 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			result.reset(ret);
 			GetNextToken(); // Eat the ")"
 		}
-	}
-	else if (curDomain->IsFunctionDefined(curT.ToStdString())) {
-		// This should be a function call
-		if (!PeekNextToken(0).IsEqual("(")) {
-			AddErrorMessage(PeekNextToken(0), "\"(\" is expected.");
-			return false;
-		}
-		Exp_FunctionDecl* pFuncDecl = curDomain->GetFunctionDeclByName(curT.ToStdString());
-		int argCnt = pFuncDecl->GetArgumentCnt();
-		std::vector<std::auto_ptr<Exp_ValueEval> > argExp(argCnt);
-		for (int i = 0; i < argCnt; ++i) {
-			argExp[i].reset(ParseComplexExpression(curDomain, (i == (argCnt-1)) ? ")" : ","));
-			if (!argExp[i].get())
-				return false;
-			GetNextToken(); // Eat the ")" or ","
-		}
-		std::vector<Exp_ValueEval*> argExpArray(argCnt);
-		for (int i = 0; i < argCnt; ++i) {
-			argExpArray[i] = argExp[i].release();
-		}
-		result.reset(new Exp_FunctionCall(pFuncDecl, &argExpArray[0], argCnt));
 	}
 	else {
 		// return a constant expression
@@ -1653,7 +1658,8 @@ Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 	std::hash_map<std::string, Exp_FunctionDecl*>::iterator it = mDefinedFunctions.find(funcName);
 	if (it != mDefinedFunctions.end())
 		return it->second;
-	return NULL;
+	else
+		return mpParentDomain ? mpParentDomain->GetFunctionDeclByName(funcName) : NULL;
 }
 
 bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
@@ -1745,9 +1751,10 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	return ret;
 }
 
-Exp_FuncRet::Exp_FuncRet(Exp_ValueEval* pRet)
+Exp_FuncRet::Exp_FuncRet(Exp_FunctionDecl* pFuncDecl, Exp_ValueEval* pRet)
 {
 	mpRetValue = pRet;
+	mpFuncDecl = pFuncDecl;
 }
 
 Exp_FuncRet::~Exp_FuncRet()
@@ -1758,8 +1765,19 @@ Exp_FuncRet::~Exp_FuncRet()
 
 bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	if (mpRetValue)
-		return mpRetValue->CheckSemantic(outType, errMsg, warnMsg);
+	if (mpRetValue) {
+		if (!mpRetValue->CheckSemantic(outType, errMsg, warnMsg))
+			return false;
+		assert(mpFuncDecl);
+		TypeInfo funcRetInfo;
+		funcRetInfo.type = mpFuncDecl->GetReturnType(funcRetInfo.pStructDef);
+		bool FtoI = false;
+		if (!funcRetInfo.IsAssignable(outType, FtoI))
+			return false;
+		if (FtoI)
+			warnMsg.push_back("Implicit float to int conversion.");
+		return true;
+	}
 	else {
 		outType.type = VarType::kVoid;
 		outType.pStructDef = NULL;

@@ -322,8 +322,9 @@ namespace SC {
 	{
 	private:
 		Exp_ValueEval* mpRetValue;
+		Exp_FunctionDecl* mpFuncDecl;
 	public:
-		Exp_FuncRet(Exp_ValueEval* pRet);
+		Exp_FuncRet(Exp_FunctionDecl* pFuncDecl, Exp_ValueEval* pRet);
 		virtual ~Exp_FuncRet();
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);

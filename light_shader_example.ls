@@ -19,11 +19,14 @@ struct TestStruct1
 
 
 
+float2 AddTwo(float a, float b)
+{
+	return float2(a+b, a*b - a);
+}
 
 
 
-
-float simpleFunc(float2& a, float b)
+float3 simpleFunc(float2& a, float b)
 {
 
 TestStruct1 myStructVar0;
@@ -39,7 +42,7 @@ bTest = false;
 	int3 myInt3Param2 = int3(1, 2, 3) + myInt3 * (myStructVar0.a + float3(3,4,5));
 	float4 myFloat4 = myInt3.yxz.rbbg;
 	myFloat4 = -myInt3Param2.zyxx;
-	return c;
+	return AddTwo(c, 123.0f).xxyy;
 }
 
 
