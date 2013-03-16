@@ -81,4 +81,47 @@ int TypeSize(VarType type)
 	return 0;
 }
 
+VarType MakeType(bool I_or_F, int elemCnt)
+{
+	if (I_or_F) {
+		return VarType(VarType::kInt + elemCnt - 1);
+	}
+	else {
+		return VarType(VarType::kFloat + elemCnt - 1);
+	}
+}
+
+int ConvertSwizzle(const char* swizzleStr, int swizzleIdx[4])
+{
+	int cnt = 0;
+	const char* pCur = swizzleStr;
+	while (*pCur != '\0') {
+		switch (*pCur) {
+		case 'x':
+		case 'r':
+			swizzleIdx[cnt] = 0;
+			break;
+		case 'y':
+		case 'g':
+			swizzleIdx[cnt] = 1;
+			break;
+		case 'z':
+		case 'b':
+			swizzleIdx[cnt] = 2;
+			break;
+		case 'w':
+		case 'a':
+			swizzleIdx[cnt] = 3;
+			break;
+		default:
+			return -1;
+		}
+		++pCur;
+		++cnt;
+		if (cnt > 4)
+			return -1;
+	}
+	return cnt;
+}
+
 } // namespace SC

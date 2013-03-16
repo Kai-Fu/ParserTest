@@ -11,7 +11,7 @@ struct TestStruct1
 {
 	float3 a; // comment test
 	/* This is commnent  */
-	int2 b, c, d;
+	int2 b, c = 0, d;
 	//float c;
 	//BadType c;
 };
@@ -27,7 +27,7 @@ float simpleFunc(float2 a, float b)
 
 TestStruct1 myStructVar0;
 
-int myIntParam1;
+int myIntParam1 = 0;
 int myIntParam2;
 //int3  myIntParam1;
 float3 myTestVar0;

@@ -688,7 +688,7 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 	return true;
 }
 
-bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit, std::vector<Exp_VarDef*>& out_defs)
+bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::vector<Exp_VarDef*>& out_defs)
 {
 	Token curT = context.GetNextToken();
 	TypeDesc typeDesc;
@@ -715,33 +715,42 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, bool al
 		curT = context.GetNextToken();
 		if (curT.GetType() != Token::kIdentifier) {
 			context.AddErrorMessage(curT, "Invalid token, must be a valid identifier.");
-			return NULL;
+			return false;
 		}
 		if (IsBuiltInType(curT)) {
 			context.AddErrorMessage(curT, "The built-in type cannot be used as variable.");
-			return NULL;
+			return false;
 		}
 		if (IsKeyWord(curT)) {
 			context.AddErrorMessage(curT, "The keyword cannot be used as variable.");
-			return NULL;
+			return false;
 		}
 		if (curDomain->IsTypeDefined(curT.ToStdString())) {
 			context.AddErrorMessage(curT, "A user-defined type cannot be redefined as variable.");
-			return NULL;
+			return false;
 		}
 
 		if (curDomain->IsVariableDefined(curT.ToStdString(), false)) {
 			context.AddErrorMessage(curT, "Variable redefination is not allowed in the same code block.");
-			return NULL;
+			return false;
 		}
 
 		// Test if the coming token is "=", which indicates the variable initialization.
 		//
 		Exp_ValueEval* pInitValue = NULL;
-		if (allowInit && context.PeekNextToken(0).IsEqual("=")) {
-			context.GetNextToken(); // Eat the "="
-			// Handle the variable initialization
-			pInitValue = context.ParseComplexExpression(curDomain, ";");
+		if (context.PeekNextToken(0).IsEqual("=")) {
+
+			if (context.GetStatusCode() & CompilingContext::kAllowVarInit) {
+				context.GetNextToken(); // Eat the "="
+				// Handle the variable initialization
+				pInitValue = context.ParseComplexExpression(curDomain, ";");
+				if (!pInitValue)
+					return false;
+			}
+			else {
+				context.AddErrorMessage(curT, "Variable initialization not allowed in this domain.");
+				return false;
+			}
 		}
 
 		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitValue);
@@ -815,7 +824,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	}
 	else if ((GetStatusCode() & kAllowVarDef) && IsVarDefinePartten(true)) {
 		std::vector<Exp_VarDef*>  varDefs;
-		if (Exp_VarDef::Parse(*this, curDomain, true, varDefs)) {
+		if (Exp_VarDef::Parse(*this, curDomain, varDefs)) {
 			for (int i = 0; i < (int)varDefs.size(); ++i)
 				curDomain->AddVarDefExpression(varDefs[i]);
 		}
@@ -1299,7 +1308,7 @@ Exp_VariableRef::~Exp_VariableRef()
 bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
 	outType.type = mpDef->GetVarType();
-	outType.pStructDef = NULL;
+	outType.pStructDef = mpDef->GetStructDef();
 	return true;
 }
 
@@ -1460,8 +1469,15 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 		}
 	}
 	else {
-		// TODO: 
-		outType.type = VarType::kInvalid;
+		// TODO: The dotOp is the swizzle operation.
+		int swizzleIdx[4];
+		int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
+		if (elemCnt <= 0) {
+			errMsg = "Invalid swizzle expression.";
+			return false;
+		}
+
+		outType.type = MakeType(IsIntegerType(parentType.type), elemCnt);
 		outType.pStructDef = NULL;
 		return false;
 

@@ -158,7 +158,7 @@ namespace SC {
 	public:
 		Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue);
 		virtual ~Exp_VarDef();
-		static bool Parse(CompilingContext& context, CodeDomain* curDomain, bool allowInit, std::vector<Exp_VarDef*>& out_defs);
+		static bool Parse(CompilingContext& context, CodeDomain* curDomain, std::vector<Exp_VarDef*>& out_defs);
 
 		void SetStructDef(Exp_StructDef* pStruct);
 		Exp_ValueEval* GetVarInitExp();
