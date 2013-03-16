@@ -11,7 +11,8 @@ struct TestStruct1
 {
 	float3 a; // comment test
 	/* This is commnent  */
-	int2 b, c = 0, d;
+	int2 b, c, d;
+	bool myBool;
 	//float c;
 	//BadType c;
 };
@@ -31,7 +32,8 @@ int myIntParam1 = 0;
 int myIntParam2;
 //int3  myIntParam1;
 float3 myTestVar0;
-
+bool bTest = true;
+bTest = false;
 	int c = a + b;
 	myTestVar0 = myIntParam1 + myTestVar0 * myIntParam2;
 	int3 myInt3Param2 = int3(1, 2, 3) + myIntParam1 * (myStructVar0.a + float3(3,4,5));

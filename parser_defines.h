@@ -11,10 +11,14 @@ namespace SC {
 		kFloat2,
 		kFloat3,
 		kFloat4,
+
 		kInt,
 		kInt2,
 		kInt3,
 		kInt4,
+
+		kBoolean,
+
 		kStructure,
 		kVoid,
 		kInvalid

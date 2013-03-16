@@ -18,7 +18,9 @@ namespace SC {
 		kIf,
 		kElse,
 		kFor,
-		kReturn
+		kReturn,
+		kTrue,
+		kFalse
 	};
 
 	void Initialize_AST_Gen();
@@ -205,6 +207,18 @@ namespace SC {
 		virtual ~Exp_Constant();
 
 		double GetValue() const;
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+	};
+
+	class Exp_TrueOrFalse : public Exp_ValueEval
+	{
+	private:
+		bool mValue;
+	public:
+		Exp_TrueOrFalse(bool value);
+		virtual ~Exp_TrueOrFalse();
+
+		bool GetValue() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 

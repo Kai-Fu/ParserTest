@@ -31,11 +31,15 @@ void Initialize_AST_Gen()
 	s_BuiltInTypes["int3"] = TypeDesc(kInt3, 3, true);
 	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 4, true);
 
+	s_BuiltInTypes["bool"] = TypeDesc(kBoolean, 4, true);
+
 	s_KeyWords["struct"] = kStructDef;
 	s_KeyWords["if"] = kIf;
 	s_KeyWords["else"] = kElse;
 	s_KeyWords["for"] = kFor;
 	s_KeyWords["return"] = kFor;
+	s_KeyWords["true"] = kTrue;
+	s_KeyWords["false"] = kFalse;
 }
 
 void Finish_AST_Gen()
@@ -1159,6 +1163,11 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			// Return a value ref expression
 			result.reset(new Exp_VariableRef(curT, curDomain->GetVarDefExpByName(curT.ToStdString())));
 		}
+		else if (curT.IsEqual("true") ||
+				 curT.IsEqual("false")) {
+			bool value = curT.IsEqual("true"); // Eat the "true" or "false"
+			result.reset(new Exp_TrueOrFalse(value));
+		}
 		else {
 			// TODO: if the identifier is a function name, it should return the function call expression
 		}
@@ -1643,6 +1652,28 @@ bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 		outType.pStructDef = NULL;
 		return true;
 	}
+}
+
+Exp_TrueOrFalse::Exp_TrueOrFalse(bool value)
+{
+	mValue = value;
+}
+
+Exp_TrueOrFalse::~Exp_TrueOrFalse()
+{
+
+}
+
+bool Exp_TrueOrFalse::GetValue() const
+{
+	return mValue;
+}
+
+bool Exp_TrueOrFalse::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	outType.type = VarType::kBoolean;
+	outType.pStructDef = NULL;
+	return true;
 }
 
 } // namespace SC
