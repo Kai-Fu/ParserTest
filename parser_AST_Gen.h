@@ -5,6 +5,8 @@
 #include <hash_map>
 #include "parser_defines.h"
 
+#define WANT_MEM_LEAK_CHECK
+
 namespace SC {
 
 
@@ -104,8 +106,12 @@ namespace SC {
 	class Expression
 	{
 	public:
-		Expression() {}
-		virtual ~Expression() {}
+		Expression();
+		virtual ~Expression();
+
+#ifdef WANT_MEM_LEAK_CHECK
+		static int s_expnCnt;
+#endif
 	};
 	
 	class Exp_StructDef;

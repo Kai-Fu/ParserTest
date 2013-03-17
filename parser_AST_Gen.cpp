@@ -368,6 +368,9 @@ CompilingContext::~CompilingContext()
 {
 	if (mRootCodeDomain)
 		delete mRootCodeDomain;
+#ifdef WANT_MEM_LEAK_CHECK
+	assert(SC::Expression::s_expnCnt == 0);
+#endif
 }
 
 bool CompilingContext::Parse(const char* content)
@@ -1846,5 +1849,28 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 	outType.type = mpFuncDef->GetReturnType(outType.pStructDef);
 	return true;
 }
+
+#ifdef WANT_MEM_LEAK_CHECK
+int Expression::s_expnCnt = 0;
+Expression::Expression()
+{
+	++s_expnCnt;
+}
+
+Expression::~Expression()
+{
+	--s_expnCnt;
+}
+
+#else
+Expression::Expression()
+{
+}
+
+Expression::~Expression()
+{
+}
+
+#endif
 
 } // namespace SC
