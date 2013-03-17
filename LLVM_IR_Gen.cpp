@@ -13,19 +13,20 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Support/TargetSelect.h>
 
+using namespace llvm;
+
 namespace SC {
 
-class CodeGenValue
-{
-public:
-
-};
-
-CodeGenValue* Expression::CodeGen()
+Value* Expression::GenerateCode()
 {
 	// Should not reach here
 	assert(0);
 	return NULL;
+}
+
+Value* Exp_Constant::GenerateCode()
+{
+	return ConstantFP::get(getGlobalContext(), APFloat(mValue));
 }
 
 } // namespace SC

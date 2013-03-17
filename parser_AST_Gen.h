@@ -7,6 +7,10 @@
 
 #define WANT_MEM_LEAK_CHECK
 
+namespace llvm {
+	class Value;
+}
+
 namespace SC {
 
 
@@ -14,7 +18,7 @@ namespace SC {
 	struct TypeDesc;
 	class Exp_VarDef;
 	class Exp_ValueEval;
-	class CodeGenValue;
+
 
 	enum KeyWord {
 		kStructDef,
@@ -109,7 +113,7 @@ namespace SC {
 	public:
 		Expression();
 		virtual ~Expression();
-		virtual CodeGenValue* CodeGen();
+		virtual llvm::Value* GenerateCode();
 
 #ifdef WANT_MEM_LEAK_CHECK
 		static int s_expnCnt;
@@ -215,6 +219,7 @@ namespace SC {
 	public:
 		Exp_Constant(double v, bool f);
 		virtual ~Exp_Constant();
+		virtual llvm::Value* GenerateCode();
 
 		double GetValue() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
