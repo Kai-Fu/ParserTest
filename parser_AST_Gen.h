@@ -14,6 +14,7 @@ namespace SC {
 	struct TypeDesc;
 	class Exp_VarDef;
 	class Exp_ValueEval;
+	class CodeGenValue;
 
 	enum KeyWord {
 		kStructDef,
@@ -108,6 +109,7 @@ namespace SC {
 	public:
 		Expression();
 		virtual ~Expression();
+		virtual CodeGenValue* CodeGen();
 
 #ifdef WANT_MEM_LEAK_CHECK
 		static int s_expnCnt;
