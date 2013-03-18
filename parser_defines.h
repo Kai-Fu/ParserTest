@@ -3,7 +3,11 @@
 
 namespace SC {
 
+#ifdef WANT_DOUBLE_FLOAT
+	typedef double Float;
+#else
 	typedef float Float;
+#endif
 	typedef int Int;
 	
 	enum VarType {

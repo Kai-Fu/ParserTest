@@ -18,7 +18,7 @@ namespace SC {
 	struct TypeDesc;
 	class Exp_VarDef;
 	class Exp_ValueEval;
-
+	class CG_Context;
 
 	enum KeyWord {
 		kStructDef,
@@ -113,7 +113,7 @@ namespace SC {
 	public:
 		Expression();
 		virtual ~Expression();
-		virtual llvm::Value* GenerateCode();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 #ifdef WANT_MEM_LEAK_CHECK
 		static int s_expnCnt;
@@ -173,6 +173,7 @@ namespace SC {
 	public:
 		Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue);
 		virtual ~Exp_VarDef();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 		static bool Parse(CompilingContext& context, CodeDomain* curDomain, std::vector<Exp_VarDef*>& out_defs);
 
 		void SetStructDef(Exp_StructDef* pStruct);
@@ -219,7 +220,7 @@ namespace SC {
 	public:
 		Exp_Constant(double v, bool f);
 		virtual ~Exp_Constant();
-		virtual llvm::Value* GenerateCode();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		double GetValue() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
