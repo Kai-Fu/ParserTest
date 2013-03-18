@@ -191,6 +191,7 @@ namespace SC {
 	public:
 		Exp_StructDef(std::string name, CodeDomain* parentDomain);
 		virtual ~Exp_StructDef();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
 
 		int GetStructSize() const;

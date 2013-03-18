@@ -32,9 +32,44 @@ private:
 	Function *mpCurFunction;
 	std::hash_map<std::string, llvm::Value*> mVariables;
 public:
+	static llvm::Type* ConvertToLLVMType(VarType tp);
+
 	llvm::Value* GetVariable(const std::string& name, bool includeParent);
-	llvm::Value* NewVariable(const std::string& name, VarType tp);
+	llvm::Value* NewVariable(const std::string& name, Exp_VarDef* pVarDef);
+	llvm::Value* NewStructDef(const std::string& name, Exp_StructDef* pStructDef);
 };
+
+llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
+{
+	switch (tp) {
+	case VarType::kFloat:
+		return SC_FLOAT_TYPE;
+	case VarType::kFloat2:
+		return VectorType::get(SC_FLOAT_TYPE, 2);
+	case VarType::kFloat3:
+		return VectorType::get(SC_FLOAT_TYPE, 3);
+	case VarType::kFloat4:
+		return VectorType::get(SC_FLOAT_TYPE, 4);
+		break;
+
+	case VarType::kInt:
+		return SC_INT_TYPE;
+	case VarType::kInt2:
+		return VectorType::get(SC_INT_TYPE, 2);
+	case VarType::kInt3:
+		return VectorType::get(SC_INT_TYPE, 3);
+		break;
+	case VarType::kInt4:
+		return VectorType::get(SC_INT_TYPE, 4);
+		break;
+	case VarType::kBoolean:
+		return SC_INT_TYPE; // Use integer to represent boolean value
+	case VarType::kVoid:
+		return Type::getVoidTy(getGlobalContext());
+	}
+
+	return NULL;
+}
 
 llvm::Value* CG_Context::GetVariable(const std::string& name, bool includeParent)
 {
@@ -45,7 +80,7 @@ llvm::Value* CG_Context::GetVariable(const std::string& name, bool includeParent
 		return it->second;
 }
 
-llvm::Value* CG_Context::NewVariable(const std::string& name, VarType tp)
+llvm::Value* CG_Context::NewVariable(const std::string& name, Exp_VarDef* pVarDef)
 {
 	assert(mpCurFunction);
 	if (mVariables.find(name) != mVariables.end())
@@ -53,38 +88,22 @@ llvm::Value* CG_Context::NewVariable(const std::string& name, VarType tp)
 	IRBuilder<> TmpB(&mpCurFunction->getEntryBlock(),
                  mpCurFunction->getEntryBlock().begin());
 	llvm::Value* ret = NULL;
-	switch (tp) {
-	case VarType::kFloat:
-		ret = TmpB.CreateAlloca(SC_FLOAT_TYPE, 0, name.c_str());
-		break;
-	case VarType::kFloat2:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_FLOAT_TYPE, 2), 0, name.c_str());
-		break;
-	case VarType::kFloat3:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_FLOAT_TYPE, 3), 0, name.c_str());
-		break;
-	case VarType::kFloat4:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_FLOAT_TYPE, 4), 0, name.c_str());
-		break;
-
-	case VarType::kInt:
-		ret = TmpB.CreateAlloca(SC_INT_TYPE, 0, name.c_str());
-		break;
-	case VarType::kInt2:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_INT_TYPE, 2), 0, name.c_str());
-		break;
-	case VarType::kInt3:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_INT_TYPE, 3), 0, name.c_str());
-		break;
-	case VarType::kInt4:
-		ret = TmpB.CreateAlloca(VectorType::get(SC_INT_TYPE, 4), 0, name.c_str());
-		break;
-	case VarType::kBoolean:
-		ret = TmpB.CreateAlloca(SC_INT_TYPE, 0, name.c_str()); // Use integer to represent boolean value
-		break;
+	if (pVarDef->GetVarType() == VarType::kStructure) {
+		// TODO:
+		return NULL;
 	}
+	else {
+		llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
+		if (llvmType)
+			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+		return ret;
+	}
+}
 
-	return ret;
+llvm::Value* CG_Context::NewStructDef(const std::string& name, Exp_StructDef* pStructDef)
+{
+	// TODO:
+	return NULL;
 }
 
 llvm::Value* Expression::GenerateCode(CG_Context* context)
@@ -106,7 +125,12 @@ llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
 {
 	std::string varName = mVarName.ToStdString();
 	assert(context->GetVariable(varName, false) == NULL);
-	return context->NewVariable(varName, mVarType);
+	return context->NewVariable(varName, this);
+}
+
+llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context)
+{
+	return NULL;
 }
 
 } // namespace SC
