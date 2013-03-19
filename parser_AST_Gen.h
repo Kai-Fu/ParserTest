@@ -152,12 +152,12 @@ namespace SC {
 		void AddFunctionDefExpression(Exp_FunctionDecl* exp);
 		void AddDomainExpression(CodeDomain* exp);
 
-		bool IsTypeDefined(const std::string& typeName);
-		bool IsVariableDefined(const std::string& varName, bool includeParent);
-		bool IsFunctionDefined(const std::string& funcName);
+		bool IsTypeDefined(const std::string& typeName) const;
+		bool IsVariableDefined(const std::string& varName, bool includeParent) const;
+		bool IsFunctionDefined(const std::string& funcName) const;
 
 		Exp_StructDef* GetStructDefineByName(const std::string& structName);
-		Exp_VarDef* GetVarDefExpByName(const std::string& varName);
+		Exp_VarDef* GetVarDefExpByName(const std::string& varName) const;
 		Exp_FunctionDecl* GetFunctionDeclByName(const std::string& funcName);
 
 	};
@@ -168,7 +168,7 @@ namespace SC {
 		Token mVarName;
 		Exp_ValueEval* mpInitValue;
 		VarType mVarType;
-		Exp_StructDef* mpStructDef;
+		const Exp_StructDef* mpStructDef;
 
 	public:
 		Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue);
@@ -176,11 +176,11 @@ namespace SC {
 		virtual llvm::Value* GenerateCode(CG_Context* context);
 		static bool Parse(CompilingContext& context, CodeDomain* curDomain, std::vector<Exp_VarDef*>& out_defs);
 
-		void SetStructDef(Exp_StructDef* pStruct);
+		void SetStructDef(const Exp_StructDef* pStruct);
 		Exp_ValueEval* GetVarInitExp();
 		Token GetVarName() const;
 		VarType GetVarType() const;
-		Exp_StructDef* GetStructDef();
+		const Exp_StructDef* GetStructDef() const;
 	};
 
 	class Exp_StructDef : public CodeDomain
@@ -205,7 +205,7 @@ namespace SC {
 	public:
 		struct TypeInfo {
 			VarType type;
-			Exp_StructDef* pStructDef;
+			const Exp_StructDef* pStructDef;
 			bool IsAssignable(const TypeInfo& from, bool& FtoI);
 		};
 
@@ -234,6 +234,7 @@ namespace SC {
 	public:
 		Exp_TrueOrFalse(bool value);
 		virtual ~Exp_TrueOrFalse();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		bool GetValue() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
@@ -248,7 +249,8 @@ namespace SC {
 	public:
 		Exp_VariableRef(Token t, Exp_VarDef* pDef);
 		virtual ~Exp_VariableRef();
-		Exp_StructDef* GetStructDef();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
+		const Exp_StructDef* GetStructDef();
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
@@ -275,7 +277,7 @@ namespace SC {
 	public:
 		Exp_UnaryOp(const std::string& op, Exp_ValueEval* pExp);
 		virtual ~Exp_UnaryOp();
-
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
@@ -318,14 +320,14 @@ namespace SC {
 
 	private:
 		VarType mReturnType;
-		Exp_StructDef* mpRetStruct;
+		const Exp_StructDef* mpRetStruct;
 		std::string mFuncName;
 		std::vector<ArgDesc> mArgments;
 	public:
 		Exp_FunctionDecl(CodeDomain* parent);
 		virtual ~Exp_FunctionDecl();
 		const std::string GetFunctionName() const;
-		VarType GetReturnType(Exp_StructDef* &retStruct);
+		VarType GetReturnType(const Exp_StructDef* &retStruct);
 		int GetArgumentCnt() const;
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
@@ -424,7 +426,7 @@ namespace SC {
 		Token GetNextToken();
 		Token PeekNextToken(int next_i);
 		bool ExpectAndEat(const char* str);
-		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, Exp_StructDef*& outStructDef);
+		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, const Exp_StructDef*& outStructDef);
 
 		bool Parse(const char* content);
 

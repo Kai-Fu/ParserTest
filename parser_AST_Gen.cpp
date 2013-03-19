@@ -1041,7 +1041,7 @@ void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
 		mDefinedStructures[pStructDef->GetStructureName()] = pStructDef;
 }
 
-bool CodeDomain::IsTypeDefined(const std::string& typeName)
+bool CodeDomain::IsTypeDefined(const std::string& typeName) const
 {
 	if (mDefinedStructures.find(typeName) == mDefinedStructures.end()) 
 		return mpParentDomain ? mpParentDomain->IsTypeDefined(typeName) : false;
@@ -1054,7 +1054,7 @@ void CodeDomain::AddDefinedVariable(const Token& t, Exp_VarDef* pDef)
 	mDefinedVariables[t.ToStdString()] = pDef;
 }
 
-bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParent)
+bool CodeDomain::IsVariableDefined(const std::string& varName, bool includeParent) const
 {
 	if (mDefinedVariables.find(varName) == mDefinedVariables.end()) {
 		if (includeParent && mpParentDomain) 
@@ -1076,9 +1076,9 @@ void CodeDomain::AddDefinedFunction(Exp_FunctionDecl* pFunc)
 		assert(0); 
 }
 
-bool CodeDomain::IsFunctionDefined(const std::string& funcName)
+bool CodeDomain::IsFunctionDefined(const std::string& funcName) const
 {
-	std::hash_map<std::string, Exp_FunctionDecl*>::iterator it = mDefinedFunctions.find(funcName);
+	std::hash_map<std::string, Exp_FunctionDecl*>::const_iterator it = mDefinedFunctions.find(funcName);
 	if (it == mDefinedFunctions.end())
 		return mpParentDomain ? mpParentDomain->IsFunctionDefined(funcName) : false;
 	else
@@ -1094,9 +1094,9 @@ Exp_StructDef* CodeDomain::GetStructDefineByName(const std::string& structName)
 		return mpParentDomain ? mpParentDomain->GetStructDefineByName(structName) : NULL;
 }
 
-Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName)
+Exp_VarDef* CodeDomain::GetVarDefExpByName(const std::string& varName) const
 {
-	std::hash_map<std::string, Exp_VarDef*>::iterator it = mDefinedVariables.find(varName);
+	std::hash_map<std::string, Exp_VarDef*>::const_iterator it = mDefinedVariables.find(varName);
 	if (it != mDefinedVariables.end())
 		return it->second;
 	else 
@@ -1117,7 +1117,7 @@ Exp_VarDef::~Exp_VarDef()
 		delete mpInitValue;
 }
 
-void Exp_VarDef::SetStructDef(Exp_StructDef* pStruct)
+void Exp_VarDef::SetStructDef(const Exp_StructDef* pStruct)
 {
 	mpStructDef = pStruct;
 }
@@ -1137,7 +1137,7 @@ VarType Exp_VarDef::GetVarType() const
 	return mVarType;
 }
 
-Exp_StructDef* Exp_VarDef::GetStructDef()
+const Exp_StructDef* Exp_VarDef::GetStructDef() const
 {
 	return mpStructDef;
 }
@@ -1179,7 +1179,7 @@ bool CompilingContext::ExpectAndEat(const char* str)
 	}
 }
 
-bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, Exp_StructDef*& outStructDef)
+bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, const Exp_StructDef*& outStructDef)
 {
 	TypeDesc retType;
 	Token curT = GetNextToken();
@@ -1422,7 +1422,7 @@ bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 	return true;
 }
 
-Exp_StructDef* Exp_VariableRef::GetStructDef()
+const Exp_StructDef* Exp_VariableRef::GetStructDef()
 {
 	if (mpDef) 
 		return mpDef->GetStructDef();
@@ -1502,8 +1502,19 @@ Exp_UnaryOp::~Exp_UnaryOp()
 
 bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	// will unary operation change the value type?
-	return mpExpr->CheckSemantic(outType, errMsg, warnMsg);
+	// Currently only "!" and "-" are supported unary operator
+	if (!mpExpr->CheckSemantic(outType, errMsg, warnMsg))
+		return false;
+	if (mOpType == "!" && outType.type != VarType::kBoolean) {
+		errMsg = "\"!\" must be followed with boolean expression.";
+		return false;
+	}
+	else if (mOpType != "-") {
+		errMsg = "Unrecoginzed unary operator.";
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -1514,6 +1525,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		return false;
 
 	if (leftType.type == VarType::kStructure || rightType.type == VarType::kStructure) {
+		// Only "=" operator can accept structure as the arguments
 		if (mOperator == "=") {
 			if (leftType.pStructDef != rightType.pStructDef) {
 				errMsg = "Cannot assign from different structure.";
@@ -1530,7 +1542,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 			return false;
 		}
 	}
-	else {
+
+	if (mOperator == "+" || mOperator == "-" || mOperator == "*" || mOperator == "/" || mOperator == "=") {
 
 		if (leftType.type != rightType.type) {
 			if (TypeElementCnt(leftType.type) > TypeElementCnt(rightType.type)) {
@@ -1544,6 +1557,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		outType.type = leftType.type;
 		return true;
 	}
+	
+	return false;
 }
 
 Exp_DotOp::Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp)
@@ -1620,7 +1635,7 @@ const std::string Exp_FunctionDecl::GetFunctionName() const
 	return mFuncName;
 }
 
-VarType Exp_FunctionDecl::GetReturnType(Exp_StructDef* &retStruct)
+VarType Exp_FunctionDecl::GetReturnType(const Exp_StructDef* &retStruct)
 {
 	retStruct = mpRetStruct;
 	return mReturnType;

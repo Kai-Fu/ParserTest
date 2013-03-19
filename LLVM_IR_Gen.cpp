@@ -31,12 +31,14 @@ private:
 	CG_Context* mpParent;
 	Function *mpCurFunction;
 	std::hash_map<std::string, llvm::Value*> mVariables;
+	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
 
 	llvm::Value* GetVariable(const std::string& name, bool includeParent);
-	llvm::Value* NewVariable(const std::string& name, Exp_VarDef* pVarDef);
-	llvm::Value* NewStructDef(const std::string& name, Exp_StructDef* pStructDef);
+	llvm::Value* NewVariable(const Exp_VarDef* pVarDef);
+	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
+	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 };
 
 llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
@@ -80,17 +82,20 @@ llvm::Value* CG_Context::GetVariable(const std::string& name, bool includeParent
 		return it->second;
 }
 
-llvm::Value* CG_Context::NewVariable(const std::string& name, Exp_VarDef* pVarDef)
+llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef)
 {
 	assert(mpCurFunction);
+	std::string name = pVarDef->GetVarName().ToStdString();
 	if (mVariables.find(name) != mVariables.end())
 		return NULL;
 	IRBuilder<> TmpB(&mpCurFunction->getEntryBlock(),
                  mpCurFunction->getEntryBlock().begin());
 	llvm::Value* ret = NULL;
 	if (pVarDef->GetVarType() == VarType::kStructure) {
-		// TODO:
-		return NULL;
+		llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());
+		if (llvmType)
+			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+		return ret;
 	}
 	else {
 		llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
@@ -100,10 +105,34 @@ llvm::Value* CG_Context::NewVariable(const std::string& name, Exp_VarDef* pVarDe
 	}
 }
 
-llvm::Value* CG_Context::NewStructDef(const std::string& name, Exp_StructDef* pStructDef)
+llvm::Type* CG_Context::GetStructType(const Exp_StructDef* pStructDef)
 {
-	// TODO:
-	return NULL;
+	std::hash_map<const Exp_StructDef*, llvm::Type*>::iterator it = mStructTypes.begin();
+	if (it != mStructTypes.end())
+		return it->second;
+	else
+		return mpParent ? mpParent->GetStructType(pStructDef) : NULL;
+}
+
+llvm::Type* CG_Context::NewStructType(const Exp_StructDef* pStructDef)
+{
+	int elemCnt = pStructDef->GetElementCount();
+	std::vector<llvm::Type*> elemTypes(elemCnt);
+	for (int i = 0; i < elemCnt; ++i) {
+		const Exp_StructDef* elemStructDef = NULL;
+		VarType elemSC_Type = pStructDef->GetElementType(i, elemStructDef);
+		if (elemSC_Type == VarType::kStructure) {
+			elemTypes[i] = GetStructType(elemStructDef);
+		}
+		else
+			elemTypes[i] = ConvertToLLVMType(elemSC_Type);
+		assert(elemTypes[i]);
+	}
+	ArrayRef<Type*> typeArray(&elemTypes[0], elemCnt);
+
+	llvm::Type* ret = StructType::create(getGlobalContext(), typeArray);
+	mStructTypes[pStructDef] = ret;
+	return ret;
 }
 
 llvm::Value* Expression::GenerateCode(CG_Context* context)
@@ -125,12 +154,23 @@ llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
 {
 	std::string varName = mVarName.ToStdString();
 	assert(context->GetVariable(varName, false) == NULL);
-	return context->NewVariable(varName, this);
+	return context->NewVariable(this);
 }
 
 llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context)
 {
+	context->NewStructType(this);
 	return NULL;
+}
+
+llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context)
+{
+	return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, mValue ? 1 : 0));
+}
+
+llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context)
+{
+	return context->GetVariable(mVariable.ToStdString(), true);
 }
 
 } // namespace SC

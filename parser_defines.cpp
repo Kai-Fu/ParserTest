@@ -54,8 +54,12 @@ int TypeElementCnt(VarType type)
 		return 3;
 	case kInt4:
 		return 4;
+	case kBoolean:
+		return 1;
+	case kVoid:
+		return 0;
 	}
-	return 0x0ffffff;
+	return 0;
 }
 
 int TypeSize(VarType type)
