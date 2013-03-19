@@ -1542,8 +1542,19 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 			return false;
 		}
 	}
+	bool isArithmetric = (mOperator == "+" || mOperator == "-" || mOperator == "*" || mOperator == "/");
+	bool isLogicOp = (mOperator == "||" || mOperator == "&&");
+	bool isBitwizeOp = (mOperator == "|" || mOperator == "&");
 
-	if (mOperator == "+" || mOperator == "-" || mOperator == "*" || mOperator == "/" || mOperator == "=") {
+	if (isArithmetric || isBitwizeOp || mOperator == "=") {
+
+		// Perform the additional check for bitwize operation
+		if (isBitwizeOp) {
+			if (!IsIntegerType(leftType.type) || !IsIntegerType(rightType.type)) {
+				errMsg = "Cannot do bitwise operation with non-integer types.";
+				return false;
+			}
+		}
 
 		if (leftType.type != rightType.type) {
 			if (TypeElementCnt(leftType.type) > TypeElementCnt(rightType.type)) {
@@ -1553,11 +1564,25 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 			if (IsIntegerType(leftType.type) && !IsIntegerType(rightType.type))
 				warnMsg.push_back("Integer implicitly converted to float type.");
 		}
+		if (mOperator == "=") {
+			if (!dynamic_cast<Exp_VariableRef*>(mpLeftExp)) {
+				errMsg = "Cannot do assignment with temporary left value.";
+				return false;
+			}
+		}
+
 		outType.pStructDef = NULL;
 		outType.type = leftType.type;
 		return true;
 	}
 	
+	if (isLogicOp) {
+		if (leftType.type != VarType::kBoolean || rightType.type != VarType::kBoolean) {
+			errMsg = "Cannot do logic operation with non-boolean types.";
+			return false;
+		}
+	}
+
 	return false;
 }
 

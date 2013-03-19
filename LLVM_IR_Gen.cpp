@@ -32,7 +32,9 @@ private:
 	Function *mpCurFunction;
 	std::hash_map<std::string, llvm::Value*> mVariables;
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
+	
 public:
+	static llvm::IRBuilder<> sBuilder;
 	static llvm::Type* ConvertToLLVMType(VarType tp);
 
 	llvm::Value* GetVariable(const std::string& name, bool includeParent);
@@ -40,6 +42,8 @@ public:
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 };
+
+llvm::IRBuilder<> CG_Context::sBuilder(getGlobalContext());
 
 llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 {
@@ -171,6 +175,32 @@ llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context)
 llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context)
 {
 	return context->GetVariable(mVariable.ToStdString(), true);
+}
+
+llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context)
+{
+	if (mOpType == "!")
+		return CG_Context::sBuilder.CreateNot(mpExpr->GenerateCode(context));
+	else if (mOpType == "-")
+		return CG_Context::sBuilder.CreateNeg(mpExpr->GenerateCode(context));
+	else {
+		assert(0);
+		return NULL;
+	}
+}
+
+llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
+{
+	llvm::Value* VL = mpLeftExp->GenerateCode(context);
+	llvm::Value* VR = mpRightExp->GenerateCode(context);
+	if (!VL || !VR)
+		return NULL;
+	if (mOperator == "=") {
+		CG_Context::sBuilder.CreateStore(VL, VR);
+		return VL;
+	}
+
+	return NULL;
 }
 
 } // namespace SC
