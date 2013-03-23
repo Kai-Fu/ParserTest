@@ -143,6 +143,7 @@ namespace SC {
 	public:
 		CodeDomain(CodeDomain* parent);
 		virtual ~CodeDomain();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		CodeDomain* GetParent();
 
@@ -326,6 +327,8 @@ namespace SC {
 	public:
 		Exp_FunctionDecl(CodeDomain* parent);
 		virtual ~Exp_FunctionDecl();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
+
 		const std::string GetFunctionName() const;
 		VarType GetReturnType(const Exp_StructDef* &retStruct);
 		int GetArgumentCnt() const;

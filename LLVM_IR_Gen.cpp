@@ -29,21 +29,53 @@ class CG_Context
 {
 private:
 	CG_Context* mpParent;
-	Function *mpCurFunction;
+	Function* mpCurFunction;
 	std::hash_map<std::string, llvm::Value*> mVariables;
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
-	
+public:
+	static llvm::Module *TheModule;
+
 public:
 	static llvm::IRBuilder<> sBuilder;
 	static llvm::Type* ConvertToLLVMType(VarType tp);
+	static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction, llvm::Type* argType, const std::string &argName);
+
+	CG_Context();
+	Function* GetCurrentFunc();
 
 	llvm::Value* GetVariable(const std::string& name, bool includeParent);
 	llvm::Value* NewVariable(const Exp_VarDef* pVarDef);
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
+	CG_Context* CreateChildContext(Function* pCurFunc);
 };
 
 llvm::IRBuilder<> CG_Context::sBuilder(getGlobalContext());
+
+CG_Context::CG_Context()
+{
+	mpParent = NULL;
+	mpCurFunction = NULL;
+}
+
+CG_Context* CG_Context::CreateChildContext(Function* pCurFunc)
+{
+	CG_Context* pRet = new CG_Context();
+	pRet->mpParent = this;
+	pRet->mpCurFunction = pCurFunc;
+	return pRet;
+}
+
+Function* CG_Context::GetCurrentFunc()
+{
+	return mpCurFunction;
+}
+
+AllocaInst* CreateEntryBlockAlloca(Function *pFunc, llvm::Type* argType, const std::string &argName) 
+{
+	llvm::IRBuilder<> TmpB(&pFunc->getEntryBlock(), pFunc->getEntryBlock().begin());
+	return TmpB.CreateAlloca(argType, 0, argName.c_str());
+}
 
 llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 {
@@ -201,6 +233,69 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 	}
 
 	return NULL;
+}
+
+llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
+{
+	// handle the argument types
+	std::vector<llvm::Type*> funcArgTypes(mArgments.size());
+	for (int i = 0; i < (int)mArgments.size(); ++i) {
+
+		VarType scType = mArgments[i].typeInfo.type;
+		if (scType == VarType::kStructure) {
+			funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
+		}
+		else {
+			funcArgTypes[i] = context->ConvertToLLVMType(scType);
+		}
+	}
+	// handle the return type
+	llvm::Type* retType = NULL;
+	if (mReturnType == VarType::kStructure) {
+		retType = context->GetStructType(mpRetStruct);
+	}
+	else 
+		retType = context->ConvertToLLVMType(mReturnType);
+
+	FunctionType *FT = FunctionType::get(retType, funcArgTypes, false);
+	Function *F = Function::Create(FT, Function::ExternalLinkage, mFuncName, CG_Context::TheModule);
+
+	// set names for all arguments
+	{
+		unsigned Idx = 0;
+		for (Function::arg_iterator AI = F->arg_begin(); Idx != mArgments.size(); ++AI, ++Idx) 
+			AI->setName(mArgments[Idx].token.ToStdString());
+	}
+
+	CG_Context* funcGC_ctx = context->CreateChildContext(F);
+	// Create a new basic block to start insertion into, this basic blokc is a must for a function.
+	BasicBlock *BB = BasicBlock::Create(getGlobalContext(), mFuncName + "_entry", F);
+	CG_Context::sBuilder.SetInsertPoint(BB);
+
+	Function::arg_iterator AI = F->arg_begin();
+	for (unsigned Idx = 0, e = funcArgTypes.size(); Idx != e; ++Idx, ++AI) {
+		Exp_VarDef* pVarDef = dynamic_cast<Exp_VarDef*>(mExpressions[Idx]);
+		assert(pVarDef);
+		llvm::Value* funcArg = pVarDef->GenerateCode(funcGC_ctx);
+		// Store the input argument's value in the the local variables.
+		CG_Context::sBuilder.CreateStore(AI, funcArg);
+	}
+
+	// The last expression of the function domain should be the function body(which is a child domain)
+	CodeDomain* pFuncBody = dynamic_cast<CodeDomain*>(mExpressions[mArgments.size()]);
+	assert(pFuncBody);
+	pFuncBody->GenerateCode(funcGC_ctx);
+
+	return F;
+}
+
+llvm::Value* CodeDomain::GenerateCode(CG_Context* context)
+{
+	CG_Context* domain_ctx = context->CreateChildContext(context->GetCurrentFunc());
+	for (int i = 0; i < (int)mExpressions.size(); ++i) {
+		mExpressions[i]->GenerateCode(domain_ctx);
+	}
+	return NULL; // the domain doesn't have the value to return
 }
 
 } // namespace SC
