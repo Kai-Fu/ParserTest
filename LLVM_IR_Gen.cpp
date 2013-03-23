@@ -34,9 +34,12 @@ private:
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
 public:
 	static llvm::Module *TheModule;
+	static llvm::ExecutionEngine* TheExecutionEngine;
+	static llvm::FunctionPassManager* TheFPM;
 
 public:
 	static llvm::IRBuilder<> sBuilder;
+
 	static llvm::Type* ConvertToLLVMType(VarType tp);
 	static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction, llvm::Type* argType, const std::string &argName);
 
@@ -51,6 +54,51 @@ public:
 };
 
 llvm::IRBuilder<> CG_Context::sBuilder(getGlobalContext());
+llvm::Module* CG_Context::TheModule = NULL;
+llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
+llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
+
+bool InitializeCodeGen()
+{
+	llvm::InitializeNativeTarget();
+	LLVMContext &llvmCtx = llvm::getGlobalContext();
+	CG_Context::TheModule = new Module("Kai's Shader Compiler", llvmCtx);
+	std::string ErrStr;
+	CG_Context::TheExecutionEngine = EngineBuilder(CG_Context::TheModule).setErrorStr(&ErrStr).create();
+	if (!CG_Context::TheExecutionEngine) {
+		return false;
+	}
+
+	CG_Context::TheFPM = new llvm::FunctionPassManager(CG_Context::TheModule);
+
+	// Set up the optimizer pipeline.  Start with registering info about how the
+	// target lays out data structures.
+	CG_Context::TheFPM->add(new DataLayout(*CG_Context::TheExecutionEngine->getDataLayout()));
+	// Provide basic AliasAnalysis support for GVN.
+	CG_Context::TheFPM->add(createBasicAliasAnalysisPass());
+	// Promote allocas to registers.
+	CG_Context::TheFPM->add(createPromoteMemoryToRegisterPass());
+	// Do simple "peephole" optimizations and bit-twiddling optzns.
+	CG_Context::TheFPM->add(createInstructionCombiningPass());
+	// Reassociate expressions.
+	CG_Context::TheFPM->add(createReassociatePass());
+	// Eliminate Common SubExpressions.
+	CG_Context::TheFPM->add(createGVNPass());
+	// Simplify the control flow graph (deleting unreachable blocks, etc).
+	CG_Context::TheFPM->add(createCFGSimplificationPass());
+
+	CG_Context::TheFPM->doInitialization();
+
+	return true;
+}
+
+void DestoryCodeGen()
+{
+	delete CG_Context::TheFPM;
+	delete CG_Context::TheExecutionEngine;
+	delete CG_Context::TheModule;
+}
+
 
 CG_Context::CG_Context()
 {
@@ -296,6 +344,13 @@ llvm::Value* CodeDomain::GenerateCode(CG_Context* context)
 		mExpressions[i]->GenerateCode(domain_ctx);
 	}
 	return NULL; // the domain doesn't have the value to return
+}
+
+llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context)
+{
+	llvm::Value* retVal = mpRetValue->GenerateCode(context);
+	assert(retVal);
+	return CG_Context::sBuilder.CreateRet(retVal);
 }
 
 } // namespace SC

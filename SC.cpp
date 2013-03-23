@@ -42,6 +42,8 @@ int main(int argc, char* argv[])
 		}*/
 	}
 
+	SC::InitializeCodeGen();
+
 	SC::Finish_AST_Gen();
 	return 0;
 }

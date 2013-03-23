@@ -346,6 +346,7 @@ namespace SC {
 	public:
 		Exp_FuncRet(Exp_FunctionDecl* pFuncDecl, Exp_ValueEval* pRet);
 		virtual ~Exp_FuncRet();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
@@ -446,4 +447,7 @@ namespace SC {
 		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken);
 
 	};
+
+	bool InitializeCodeGen();
+	void DestoryCodeGen();
 } // namespace SC
