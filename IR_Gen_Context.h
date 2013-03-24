@@ -1,0 +1,59 @@
+#pragma once
+
+#include "parser_AST_Gen.h"
+
+#include <llvm/DerivedTypes.h>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/IRBuilder.h>
+#include <llvm/LLVMContext.h>
+#include <llvm/Module.h>
+#include <llvm/PassManager.h>
+#include <llvm/Analysis/Verifier.h>
+#include <llvm/Analysis/Passes.h>
+#include <llvm/DataLayout.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Support/TargetSelect.h>
+
+using namespace llvm;
+
+#ifdef WANT_DOUBLE_FLOAT
+#define SC_FLOAT_TYPE Type::getDoubleTy(getGlobalContext())
+#else
+#define SC_FLOAT_TYPE Type::getFloatTy(getGlobalContext())
+#endif
+
+#define SC_INT_TYPE Type::getInt32Ty(getGlobalContext())
+
+namespace SC {
+
+bool InitializeCodeGen();
+void DestoryCodeGen();
+
+class CG_Context
+{
+private:
+	CG_Context* mpParent;
+	Function* mpCurFunction;
+	std::hash_map<std::string, llvm::Value*> mVariables;
+	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
+public:
+	static llvm::Module *TheModule;
+	static llvm::ExecutionEngine* TheExecutionEngine;
+	static llvm::FunctionPassManager* TheFPM;
+	static llvm::IRBuilder<> sBuilder;
+
+public:
+	static llvm::Type* ConvertToLLVMType(VarType tp);
+
+	CG_Context();
+	Function* GetCurrentFunc();
+
+	llvm::Value* GetVariable(const std::string& name, bool includeParent);
+	llvm::Value* NewVariable(const Exp_VarDef* pVarDef);
+	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
+	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
+	CG_Context* CreateChildContext(Function* pCurFunc);
+};
+
+} // namespace SC

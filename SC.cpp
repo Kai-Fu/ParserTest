@@ -3,10 +3,12 @@
 
 #include <stdio.h>
 #include "parser_AST_Gen.h"
+#include "IR_Gen_Context.h"
 
 int main(int argc, char* argv[])
 {
 	SC::Initialize_AST_Gen();
+	SC::InitializeCodeGen();
 
 	FILE* f = NULL;
 	fopen_s(&f, "light_shader_example.ls", "r");
@@ -40,9 +42,9 @@ int main(int argc, char* argv[])
 				break;
 
 		}*/
+		ctx.JIT_Function("RetSimpleValue");
 	}
-
-	SC::InitializeCodeGen();
+	
 
 	SC::Finish_AST_Gen();
 	return 0;

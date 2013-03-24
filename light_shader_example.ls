@@ -17,6 +17,10 @@ struct TestStruct1
 	//BadType c;
 };
 
+float RetSimpleValue()
+{
+	return 12354.56f;
+}
 
 
 float2 AddTwo(float a, float b)

@@ -376,12 +376,11 @@ namespace SC {
 
 	class RootDomain : public CodeDomain
 	{
-	private:
-		
-	
 	public:
 		RootDomain();
 		virtual ~RootDomain();
+
+		void* JIT_Function(const std::string& funcName);
 	};
 
 
@@ -446,8 +445,8 @@ namespace SC {
 		//
 		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken);
 
+		void* JIT_Function(const std::string& funcName);
+
 	};
 
-	bool InitializeCodeGen();
-	void DestoryCodeGen();
 } // namespace SC

@@ -338,9 +338,11 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 			return Token(NULL, 0, mCurParsingLOC, Token::kUnknown);
 		}
 
+		bool isFloat = false;
 		if (isFirstCharNumber) {
 			// check for decimal point, e.g. 123.456f
 			if (*mCurParsingPtr == '.') {
+				isFloat = true;
 				mCurParsingPtr++;
 				while (_isNumber(*mCurParsingPtr)) 
 					mCurParsingPtr++;
@@ -350,7 +352,9 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 				mCurParsingPtr++;
 		}
 		
-		ret = Token(pFirstCh, mCurParsingPtr - pFirstCh, mCurParsingLOC, isFirstCharNumber ? Token::kConstInt : Token::kIdentifier);
+		ret = Token(pFirstCh, mCurParsingPtr - pFirstCh, mCurParsingLOC, isFirstCharNumber ? 
+			(isFloat ? Token::kConstFloat : Token::kConstInt) : 
+			Token::kIdentifier);
 	}
 
 	return ret;
@@ -1724,7 +1728,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	//
 	if (!context.ExpectAndEat("("))
 		return false;
-	do {
+	while (!context.PeekNextToken(0).IsEqual(")")) {
 		Exp_FunctionDecl::ArgDesc argDesc;
 		if (!context.ExpectTypeAndEat(curDomain, argDesc.typeInfo.type, argDesc.typeInfo.pStructDef))
 			return false;
@@ -1747,7 +1751,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		if (context.PeekNextToken(0).IsEqual(","))
 			context.GetNextToken(); // Eat the ","
 
-	} while (!context.PeekNextToken(0).IsEqual(")"));
+	} 
 
 	context.GetNextToken(); // Eat the ")"
 
@@ -1889,6 +1893,12 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 	outType.type = mpFuncDef->GetReturnType(outType.pStructDef);
 	return true;
 }
+
+void* CompilingContext::JIT_Function(const std::string& funcName)
+{
+	return mRootCodeDomain->JIT_Function(funcName);
+}
+
 
 #ifdef WANT_MEM_LEAK_CHECK
 int Expression::s_expnCnt = 0;

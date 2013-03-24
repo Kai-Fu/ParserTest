@@ -84,12 +84,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="IR_Gen_Context.cpp" />
     <ClCompile Include="LLVM_IR_Gen.cpp" />
     <ClCompile Include="parser_AST_Gen.cpp" />
     <ClCompile Include="parser_defines.cpp" />
     <ClCompile Include="SC.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="IR_Gen_Context.h" />
     <ClInclude Include="parser_AST_Gen.h" />
     <ClInclude Include="parser_defines.h" />
   </ItemGroup>
