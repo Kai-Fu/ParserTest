@@ -52,13 +52,13 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(LLVM_PATH)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(LLVM_PATH_X86_DEBUG)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4800;4146;4996;4244</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(LLVM_PATH)\lib;</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(LLVM_PATH_X86_DEBUG)\lib;</AdditionalLibraryDirectories>
       <AdditionalDependencies>LLVMJIT.lib;LLVMInterpreter.lib;LLVMX86CodeGen.lib;LLVMX86AsmParser.lib;LLVMX86Disassembler.lib;LLVMRuntimeDyld.lib;LLVMExecutionEngine.lib;LLVMAsmPrinter.lib;LLVMSelectionDAG.lib;LLVMX86Desc.lib;LLVMMCParser.lib;LLVMCodeGen.lib;LLVMX86AsmPrinter.lib;LLVMX86Info.lib;LLVMScalarOpts.lib;LLVMX86Utils.lib;LLVMInstCombine.lib;LLVMTransformUtils.lib;LLVMipa.lib;LLVMAnalysis.lib;LLVMTarget.lib;LLVMCore.lib;LLVMMC.lib;LLVMObject.lib;LLVMSupport.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -71,7 +71,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(LLVM_PATH)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(LLVM_PATH_X86_RELEASE)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4800;4146;4996;4244</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -79,7 +79,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(LLVM_PATH)\lib;</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(LLVM_PATH_X86_RELEASE)\lib;</AdditionalLibraryDirectories>
       <AdditionalDependencies>LLVMJIT.lib;LLVMInterpreter.lib;LLVMX86CodeGen.lib;LLVMX86AsmParser.lib;LLVMX86Disassembler.lib;LLVMRuntimeDyld.lib;LLVMExecutionEngine.lib;LLVMAsmPrinter.lib;LLVMSelectionDAG.lib;LLVMX86Desc.lib;LLVMMCParser.lib;LLVMCodeGen.lib;LLVMX86AsmPrinter.lib;LLVMX86Info.lib;LLVMScalarOpts.lib;LLVMX86Utils.lib;LLVMInstCombine.lib;LLVMTransformUtils.lib;LLVMipa.lib;LLVMAnalysis.lib;LLVMTarget.lib;LLVMCore.lib;LLVMMC.lib;LLVMObject.lib;LLVMSupport.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

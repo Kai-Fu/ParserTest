@@ -23,12 +23,15 @@ float RetSimpleValue()
 }
 
 
-float2 AddTwo(float a, float b)
+float2 ReturnFloat2(float a, float b)
 {
 	return float2(a+b, a*b - a);
 }
 
-
+float DistanceSqr(float a, float b)
+{
+	return a*a + b*b;
+}
 
 float3 simpleFunc(float2& a, float b)
 {
@@ -46,7 +49,7 @@ bTest = false;
 	int3 myInt3Param2 = int3(1, 2, 3) + myInt3 * (myStructVar0.a + float3(3,4,5));
 	float4 myFloat4 = myInt3.yxz.rbbg;
 	myFloat4 = -myInt3Param2.zyxx;
-	return AddTwo(c, 123.0f).xxyy;
+	return ReturnFloat2(c, 123.0f).xxyy;
 }
 
 
