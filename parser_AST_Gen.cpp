@@ -996,6 +996,18 @@ CodeDomain::~CodeDomain()
 	}
 }
 
+bool CodeDomain::HasReturnExpForAllPaths()
+{
+	for (int i = 0; i < (int)mExpressions.size(); ++i) {
+		if (dynamic_cast<Exp_FuncRet*>(mExpressions[i]))
+			return true;
+		CodeDomain* childDomain = dynamic_cast<CodeDomain*>(mExpressions[i]);
+		if (childDomain && childDomain->HasReturnExpForAllPaths())
+			return true;
+	}
+	return false;
+}
+
 CodeDomain* CodeDomain::GetParent()
 {
 	return mpParentDomain;
@@ -1720,6 +1732,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	// The second token should be the function name
 	//
 	Token curT = context.GetNextToken();
+	Token funcNameT = curT;
 	bool alreadyDefined = (curDomain->IsFunctionDefined(curT.ToStdString()));
 	result->mFuncName = curT.ToStdString();
 
@@ -1793,6 +1806,13 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 			ret = false;
 		context.PopStatusCode();
 
+		// If this function returns a value except void type, check if all the code paths have return expressions.
+		if (pFuncDef->mReturnType != VarType::kVoid) {
+			if (!pFuncDef->HasReturnExpForAllPaths()) {
+				context.AddErrorMessage(funcNameT, "Not all path has the return value.");
+				ret = false;
+			}
+		}
 	}
 
 	return ret;

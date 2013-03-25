@@ -144,6 +144,7 @@ namespace SC {
 		CodeDomain(CodeDomain* parent);
 		virtual ~CodeDomain();
 		virtual llvm::Value* GenerateCode(CG_Context* context);
+		virtual bool HasReturnExpForAllPaths();
 
 		CodeDomain* GetParent();
 
@@ -324,6 +325,7 @@ namespace SC {
 		const Exp_StructDef* mpRetStruct;
 		std::string mFuncName;
 		std::vector<ArgDesc> mArgments;
+
 	public:
 		Exp_FunctionDecl(CodeDomain* parent);
 		virtual ~Exp_FunctionDecl();
