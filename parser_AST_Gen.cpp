@@ -1692,10 +1692,15 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 bool Exp_DotOp::IsAssignable()
 {
 	Exp_VariableRef* pVarDef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	if (pVarDef->GetStructDef() != NULL)
+	if (pVarDef && pVarDef->GetStructDef() != NULL)
 		return true;
-	else
-		return false;
+	else {
+		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
+		if (pDotOp && pDotOp->IsAssignable())
+			return true;
+		else
+			return false;
+	}
 }
 
 Exp_FunctionDecl::Exp_FunctionDecl(CodeDomain* parent) :

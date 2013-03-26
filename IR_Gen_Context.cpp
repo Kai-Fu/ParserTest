@@ -143,7 +143,7 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRe
 
 llvm::Type* CG_Context::GetStructType(const Exp_StructDef* pStructDef)
 {
-	std::hash_map<const Exp_StructDef*, llvm::Type*>::iterator it = mStructTypes.begin();
+	std::hash_map<const Exp_StructDef*, llvm::Type*>::iterator it = mStructTypes.find(pStructDef);
 	if (it != mStructTypes.end())
 		return it->second;
 	else

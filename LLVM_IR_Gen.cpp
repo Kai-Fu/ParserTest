@@ -185,28 +185,39 @@ llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context)
 llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context)
 {
 	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	if (pVarRef && pVarRef->GetStructDef() != NULL) {
+	std::string errMsg;
+	std::vector<std::string> warnMsg;
+	Exp_ValueEval::TypeInfo typeInfo;
+	mpExp->CheckSemantic(typeInfo, errMsg, warnMsg);
+	const Exp_StructDef* pStructDef = typeInfo.pStructDef;
+	llvm::Value* dataPtr = NULL;
+	if (pVarRef && typeInfo.pStructDef) {
 		// This expression is only assignable when it is accessing the structure's member.
 		std::string& refName = pVarRef->GetVarDef()->GetVarName().ToStdString();
-		llvm::Value* varPtr = context->GetVariablePtr(refName, true);
-		const Exp_StructDef* pStructDef = pVarRef->GetStructDef();
-		
-		std::vector<llvm::Value*> indices(2);
-		indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
-		indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
-		return CG_Context::sBuilder.CreateGEP(varPtr, indices);
+		dataPtr = context->GetVariablePtr(refName, true);
 	}
-	else
-		return NULL;
+	else {
+		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
+		if (pDotOp) {
+			dataPtr = pDotOp->GetValuePtr(context);
+		}
+		else
+			return NULL;
+	}
+
+	std::vector<llvm::Value*> indices(2);
+	indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+	indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
+	return CG_Context::sBuilder.CreateGEP(dataPtr, indices);
 }
 
 llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context)
 {
-	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	if (pVarRef && pVarRef->GetStructDef() != NULL) {
-		return CG_Context::sBuilder.CreateLoad(GetValuePtr(context));
+	llvm::Value* dataPtr = GetValuePtr(context);
+	if (dataPtr) {
+		return CG_Context::sBuilder.CreateLoad(dataPtr);
 	}
-	else
+	else 
 		return NULL;
 }
 

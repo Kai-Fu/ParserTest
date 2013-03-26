@@ -14,12 +14,18 @@ struct TestStruct1
 	float b;
 };
 
+struct NestedStruct
+{
+	float a;
+	TestStruct1 s;
+};
+
 float DistanceSqr(float a, float b)
 {
-	TestStruct1 varStruct;
+	NestedStruct varStruct;
 	varStruct.a = 3.0;
-	varStruct.b = 4.0;
-	return a*a + b*b + varStruct.a * varStruct.b;
+	varStruct.s.b = 4.0;
+	return a*a + b*b + varStruct.a * varStruct.s.b;
 }
 
 float RetSimpleValue(float& mod)
