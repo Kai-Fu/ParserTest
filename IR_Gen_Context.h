@@ -51,7 +51,7 @@ public:
 
 	llvm::Value* GetVariableValue(const std::string& name, bool includeParent);
 	llvm::Value* GetVariablePtr(const std::string& name, bool includeParent);
-	llvm::Value* NewVariable(const Exp_VarDef* pVarDef);
+	llvm::Value* NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRefPtr);
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 	CG_Context* CreateChildContext(Function* pCurFunc);

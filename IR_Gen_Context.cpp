@@ -115,7 +115,7 @@ llvm::Value* CG_Context::GetVariablePtr(const std::string& name, bool includePar
 		return it == mVariables.end() ? NULL : it->second;
 }
 
-llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef)
+llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRefPtr)
 {
 	assert(mpCurFunction);
 	std::string name = pVarDef->GetVarName().ToStdString();
@@ -123,16 +123,18 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef)
 		return NULL;
 	IRBuilder<> TmpB(&mpCurFunction->getEntryBlock(),
                  mpCurFunction->getEntryBlock().begin());
-	llvm::Value* ret = NULL;
-	if (pVarDef->GetVarType() == VarType::kStructure) {
-		llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());
-		if (llvmType)
-			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
-	}
-	else {
-		llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
-		if (llvmType)
-			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+	llvm::Value* ret = pRefPtr;
+	if (!pRefPtr) {
+		if (pVarDef->GetVarType() == VarType::kStructure) {
+			llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());
+			if (llvmType)
+				ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+		}
+		else {
+			llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
+			if (llvmType)
+				ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+		}
 	}
 	
 	if (ret) mVariables[name] = ret;

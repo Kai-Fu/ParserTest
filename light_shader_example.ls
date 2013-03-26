@@ -22,8 +22,9 @@ float DistanceSqr(float a, float b)
 	return a*a + b*b + varStruct.a * varStruct.b;
 }
 
-float RetSimpleValue()
+float RetSimpleValue(float& mod)
 {
+	mod = 234.888f;
 	float var = 123.891f + 321.0f;
 	return var;
 }

@@ -43,9 +43,9 @@ int main(int argc, char* argv[])
 
 		}*/
 		ctx.JIT_Compile();
-
-		float (*FP)() = (float (*)())(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
-		float ret = FP();
+		float mod = 0.0f;
+		float (*FP)(float* a) = (float (*)(float* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
+		float ret = FP(&mod);
 
 		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
 		ret = FP_Dis(1.5f, 6.3f);

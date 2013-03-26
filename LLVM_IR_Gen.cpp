@@ -36,7 +36,7 @@ llvm::Value* Exp_Constant::GenerateCode(CG_Context* context)
 llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
 {
 	std::string varName = mVarName.ToStdString();
-	llvm::Value* varPtr = context->NewVariable(this);
+	llvm::Value* varPtr = context->NewVariable(this, NULL);
 	if (mpInitValue) {
 		llvm::Value* initValue = mpInitValue->GenerateCode(context);
 		CG_Context::sBuilder.CreateStore(initValue, varPtr);
@@ -108,17 +108,17 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
 	for (int i = 0; i < (int)mArgments.size(); ++i) {
 
 		VarType scType = mArgments[i].typeInfo.type;
-		if (mArgments[i].isByRef) {
-			funcArgTypes[i] = llvm::Type::getPrimitiveType(getGlobalContext(), llvm::Type::PointerTyID);
+		
+		if (scType == VarType::kStructure) {
+			funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
 		}
 		else {
-			if (scType == VarType::kStructure) {
-				funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
-			}
-			else {
-				funcArgTypes[i] = context->ConvertToLLVMType(scType);
-			}
+			funcArgTypes[i] = context->ConvertToLLVMType(scType);
 		}
+
+		if (mArgments[i].isByRef) 
+			funcArgTypes[i] =  llvm::PointerType::get(funcArgTypes[i], 0);
+	
 	}
 	// handle the return type
 	llvm::Type* retType = NULL;
@@ -144,12 +144,18 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
 	CG_Context::sBuilder.SetInsertPoint(BB);
 
 	Function::arg_iterator AI = F->arg_begin();
-	for (unsigned Idx = 0, e = funcArgTypes.size(); Idx != e; ++Idx, ++AI) {
+	for (int Idx = 0, e = funcArgTypes.size(); Idx != e; ++Idx, ++AI) {
 		Exp_VarDef* pVarDef = dynamic_cast<Exp_VarDef*>(mExpressions[Idx]);
 		assert(pVarDef);
-		llvm::Value* funcArg = pVarDef->GenerateCode(funcGC_ctx);
-		// Store the input argument's value in the the local variables.
-		CG_Context::sBuilder.CreateStore(AI, funcArg);
+		if (mArgments[Idx].isByRef) {
+			// Create a reference variable
+			llvm::Value* funcArg = funcGC_ctx->NewVariable(pVarDef, AI);
+		}
+		else {
+			llvm::Value* funcArg = funcGC_ctx->NewVariable(pVarDef, NULL);
+			// Store the input argument's value in the the local variables.
+			CG_Context::sBuilder.CreateStore(AI, funcArg);
+		}
 	}
 
 	// The last expression of the function domain should be the function body(which is a child domain)
