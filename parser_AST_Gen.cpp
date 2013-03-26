@@ -1386,8 +1386,8 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 			else {
 				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
 				if (simpleExp2) {
-					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op1_str, simpleExp0, simpleExp1);
-					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op0_str, pBinaryOp0, simpleExp2);
+					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
+					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, pBinaryOp0, simpleExp2);
 					ret = pBinaryOp1;
 				}
 			}

@@ -49,11 +49,13 @@ public:
 	CG_Context();
 	Function* GetCurrentFunc();
 
-	llvm::Value* GetVariable(const std::string& name, bool includeParent);
+	llvm::Value* GetVariableValue(const std::string& name, bool includeParent);
+	llvm::Value* GetVariablePtr(const std::string& name, bool includeParent);
 	llvm::Value* NewVariable(const Exp_VarDef* pVarDef);
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 	CG_Context* CreateChildContext(Function* pCurFunc);
+	llvm::Value* CreateBinaryExpression(const std::string& opStr, llvm::Value* pL, llvm::Value* pR, bool isFloatType, int vecElemCnt);
 };
 
 } // namespace SC

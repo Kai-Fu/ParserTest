@@ -18,6 +18,18 @@ bool IsBuiltInType(VarType type)
 	return false;
 }
 
+bool IsFloatType(VarType type)
+{
+	switch (type) {
+	case kFloat:
+	case kFloat2:
+	case kFloat3:
+	case kFloat4:
+		return true;
+	}
+	return false;
+}
+
 bool IsIntegerType(VarType type)
 {
 	switch (type) {

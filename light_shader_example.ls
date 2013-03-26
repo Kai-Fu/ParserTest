@@ -17,9 +17,15 @@ struct TestStruct1
 	//BadType c;
 };
 
+float DistanceSqr(float a, float b)
+{
+	return a*a + b*b;
+}
+
 float RetSimpleValue()
 {
-	return 12354.56f;
+	float var = 123.891f + 321.0f;
+	return var;
 }
 
 
@@ -28,10 +34,7 @@ float2 ReturnFloat2(float a, float b)
 	return float2(a+b, a*b - a);
 }
 
-float DistanceSqr(float a, float b)
-{
-	return a*a + b*b;
-}
+
 
 float3 simpleFunc(float2& a, float b)
 {

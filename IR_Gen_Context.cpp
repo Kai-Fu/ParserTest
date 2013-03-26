@@ -100,13 +100,19 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 	return NULL;
 }
 
-llvm::Value* CG_Context::GetVariable(const std::string& name, bool includeParent)
+llvm::Value* CG_Context::GetVariableValue(const std::string& name, bool includeParent)
+{
+	llvm::Value* ptr = GetVariablePtr(name, includeParent);
+	return ptr ? sBuilder.CreateLoad(ptr, name) : NULL;
+}
+
+llvm::Value* CG_Context::GetVariablePtr(const std::string& name, bool includeParent)
 {
 	std::hash_map<std::string, llvm::Value*>::iterator it = mVariables.find(name);
 	if (it == mVariables.end() && includeParent)
-		return mpParent ? mpParent->GetVariable(name, true) : NULL;
+		return mpParent ? mpParent->GetVariablePtr(name, true) : NULL;
 	else
-		return it->second;
+		return it == mVariables.end() ? NULL : it->second;
 }
 
 llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef)
@@ -122,14 +128,15 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef)
 		llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());
 		if (llvmType)
 			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
-		return ret;
 	}
 	else {
 		llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
 		if (llvmType)
 			ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
-		return ret;
 	}
+	
+	if (ret) mVariables[name] = ret;
+	return ret;
 }
 
 llvm::Type* CG_Context::GetStructType(const Exp_StructDef* pStructDef)
@@ -173,8 +180,51 @@ void* RootDomain::JIT_Function(const std::string& funcName)
 	if (!funcValue)
 		return NULL;
 
+	CG_Context::TheModule->dump();
+
 	void *retFuncPtr = CG_Context::TheExecutionEngine->getPointerToFunction(funcValue);
 	return retFuncPtr;
+}
+
+llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, llvm::Value* pL, llvm::Value* pR, bool isFloatType, int vecElemCnt)
+{
+	if (vecElemCnt == 1) {
+		// For scalar type
+		if (isFloatType) {
+			// Generate instruction for float type
+			if (opStr == "+") 
+				return sBuilder.CreateFAdd(pL, pR);
+			else if (opStr == "-") 
+				return sBuilder.CreateFSub(pL, pR);
+			else if (opStr == "*") 
+				return sBuilder.CreateFMul(pL, pR);
+			else if (opStr == "/") 
+				return sBuilder.CreateFDiv(pL, pR);
+		}
+		else {
+			// Generate instruction for integer type
+			if (opStr == "+") 
+				return sBuilder.CreateAdd(pL, pR);
+			else if (opStr == "-") 
+				return sBuilder.CreateSub(pL, pR);
+			else if (opStr == "*") 
+				return sBuilder.CreateMul(pL, pR);
+			else if (opStr == "/") 
+				return sBuilder.CreateSDiv(pL, pR);
+		}
+	}
+	else {
+		// For vector type
+		if (isFloatType) {
+			// Generate instruction for float vector
+			
+		}
+		else {
+			// Generate instruction for integer vector
+			
+		}
+	}
+	return NULL;
 }
 
 }

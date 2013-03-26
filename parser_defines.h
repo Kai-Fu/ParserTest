@@ -29,6 +29,7 @@ namespace SC {
 		};
 
 	bool IsBuiltInType(VarType type);
+	bool IsFloatType(VarType type);
 	bool IsIntegerType(VarType type);
 	int TypeElementCnt(VarType type);
 	int TypeSize(VarType type);

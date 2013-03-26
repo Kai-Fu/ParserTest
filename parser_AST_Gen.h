@@ -294,6 +294,7 @@ namespace SC {
 		Exp_BinaryOp(const std::string& op, Exp_ValueEval* pLeft, Exp_ValueEval* pRight);
 		virtual ~Exp_BinaryOp();
 		virtual llvm::Value* GenerateCode(CG_Context* context);
+
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 

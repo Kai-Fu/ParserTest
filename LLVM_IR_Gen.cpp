@@ -36,8 +36,12 @@ llvm::Value* Exp_Constant::GenerateCode(CG_Context* context)
 llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
 {
 	std::string varName = mVarName.ToStdString();
-	assert(context->GetVariable(varName, false) == NULL);
-	return context->NewVariable(this);
+	llvm::Value* varPtr = context->NewVariable(this);
+	if (mpInitValue) {
+		llvm::Value* initValue = mpInitValue->GenerateCode(context);
+		CG_Context::sBuilder.CreateStore(initValue, varPtr);
+	}
+	return varPtr;
 }
 
 llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context)
@@ -53,7 +57,7 @@ llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context)
 
 llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context)
 {
-	return context->GetVariable(mVariable.ToStdString(), true);
+	return context->GetVariableValue(mVariable.ToStdString(), true);
 }
 
 llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context)
@@ -75,10 +79,21 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 	if (!VL || !VR)
 		return NULL;
 	if (mOperator == "=") {
-		CG_Context::sBuilder.CreateStore(VL, VR);
+		Exp_VarDef* pVarDef = dynamic_cast<Exp_VarDef*>(mpLeftExp);
+		assert(pVarDef);
+		llvm::Value* varPtr = context->GetVariablePtr(pVarDef->GetVarName().ToStdString(), true);
+		assert(varPtr);
+		CG_Context::sBuilder.CreateStore(VR, varPtr);
 		return VL;
 	}
-
+	else {
+		Exp_ValueEval::TypeInfo typeInfo;
+		std::string errMsg;
+		std::vector<std::string> warnMsg;
+		mpLeftExp->CheckSemantic(typeInfo, errMsg, warnMsg);
+		assert(!typeInfo.pStructDef);
+		return context->CreateBinaryExpression(mOperator, VL, VR, IsFloatType(typeInfo.type), TypeElementCnt(typeInfo.type));
+	}
 	return NULL;
 }
 
