@@ -5,6 +5,14 @@
 #include "parser_AST_Gen.h"
 #include "IR_Gen_Context.h"
 
+struct TestStruct1
+{
+	float a;
+	/* This is commnent  */
+	float b;
+};
+
+
 int main(int argc, char* argv[])
 {
 	SC::Initialize_AST_Gen();
@@ -43,8 +51,8 @@ int main(int argc, char* argv[])
 
 		}*/
 		ctx.JIT_Compile();
-		float mod = 0.0f;
-		float (*FP)(float* a) = (float (*)(float* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
+		TestStruct1 mod = {0.0f, 0.0f};
+		float (*FP)(TestStruct1* a) = (float (*)(TestStruct1* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
 		float ret = FP(&mod);
 
 		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
