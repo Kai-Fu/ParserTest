@@ -30,7 +30,7 @@ llvm::Value* Exp_Constant::GenerateCode(CG_Context* context)
 	if (mIsFromFloat) 
 		return ConstantFP::get(getGlobalContext(), APFloat((Float)mValue));
 	else
-		return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)mValue));
+		return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)mValue, true));
 }
 
 llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
@@ -72,6 +72,13 @@ llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context)
 	}
 }
 
+
+llvm::Value* Exp_VariableRef::GetValuePtr(CG_Context* context)
+{
+	llvm::Value* varPtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
+	return varPtr;
+}
+
 llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 {
 	llvm::Value* VL = mpLeftExp->GenerateCode(context);
@@ -79,12 +86,9 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 	if (!VL || !VR)
 		return NULL;
 	if (mOperator == "=") {
-		Exp_VarDef* pVarDef = dynamic_cast<Exp_VarDef*>(mpLeftExp);
-		assert(pVarDef);
-		llvm::Value* varPtr = context->GetVariablePtr(pVarDef->GetVarName().ToStdString(), true);
-		assert(varPtr);
-		CG_Context::sBuilder.CreateStore(VR, varPtr);
-		return VL;
+		llvm::Value* ptr = mpLeftExp->GetValuePtr(context);
+		CG_Context::sBuilder.CreateStore(VR, ptr);
+		return CG_Context::sBuilder.CreateLoad(ptr);
 	}
 	else {
 		Exp_ValueEval::TypeInfo typeInfo;
@@ -104,11 +108,16 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
 	for (int i = 0; i < (int)mArgments.size(); ++i) {
 
 		VarType scType = mArgments[i].typeInfo.type;
-		if (scType == VarType::kStructure) {
-			funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
+		if (mArgments[i].isByRef) {
+			funcArgTypes[i] = llvm::Type::getPrimitiveType(getGlobalContext(), llvm::Type::PointerTyID);
 		}
 		else {
-			funcArgTypes[i] = context->ConvertToLLVMType(scType);
+			if (scType == VarType::kStructure) {
+				funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
+			}
+			else {
+				funcArgTypes[i] = context->ConvertToLLVMType(scType);
+			}
 		}
 	}
 	// handle the return type
@@ -165,6 +174,34 @@ llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context)
 	llvm::Value* retVal = mpRetValue->GenerateCode(context);
 	assert(retVal);
 	return CG_Context::sBuilder.CreateRet(retVal);
+}
+
+llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context)
+{
+	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
+	if (pVarRef && pVarRef->GetStructDef() != NULL) {
+		// This expression is only assignable when it is accessing the structure's member.
+		std::string& refName = pVarRef->GetVarDef()->GetVarName().ToStdString();
+		llvm::Value* varPtr = context->GetVariablePtr(refName, true);
+		const Exp_StructDef* pStructDef = pVarRef->GetStructDef();
+		
+		std::vector<llvm::Value*> indices(2);
+		indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+		indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
+		return CG_Context::sBuilder.CreateGEP(varPtr, indices);
+	}
+	else
+		return NULL;
+}
+
+llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context)
+{
+	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
+	if (pVarRef && pVarRef->GetStructDef() != NULL) {
+		return CG_Context::sBuilder.CreateLoad(GetValuePtr(context));
+	}
+	else
+		return NULL;
 }
 
 } // namespace SC

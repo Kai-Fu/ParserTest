@@ -593,6 +593,13 @@ Exp_StructDef* Exp_StructDef::Parse(CompilingContext& context, CodeDomain* curDo
 	}
 }
 
+void Exp_StructDef::AddVarDefExpression(Exp_VarDef* exp)
+{
+	CodeDomain::AddVarDefExpression(exp);
+	mIdx2ValueDefs[mExpressions.size() - 1] = exp;
+	mElementName2Idx[exp->GetVarName().ToStdString()] = mExpressions.size() - 1;
+}
+
 int Exp_StructDef::GetStructSize() const
 {
 	int totalSize = 0;
@@ -631,6 +638,15 @@ VarType Exp_StructDef::GetElementType(int idx, const Exp_StructDef* &outStructDe
 		outStructDef = it->second->GetStructDef();
 		return ret;
 	}
+}
+
+int Exp_StructDef::GetElementIdxByName(const std::string& name) const
+{
+	std::hash_map<std::string, int>::const_iterator it = mElementName2Idx.find(name);
+	if (it != mElementName2Idx.end())
+		return it->second;
+	else
+		return -1;
 }
 
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
@@ -775,7 +791,7 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 					return false;
 				}
 				bool FtoI = false;
-				if (!IsAssignable(varType, typeInfo.type, FtoI)) {
+				if (!IsTypeCompatible(varType, typeInfo.type, FtoI)) {
 					delete pInitValue;
 					return false;
 				}
@@ -845,13 +861,13 @@ void CompilingContext::PopStatusCode()
 	mStatusCode.pop_back();
 }
 
-bool Exp_ValueEval::TypeInfo::IsAssignable(const TypeInfo& from, bool& FtoI)
+bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI)
 {
 	FtoI = false;
 	if (type == VarType::kStructure)
 		return pStructDef == from.pStructDef;
 	else
-		return SC::IsAssignable(type, from.type, FtoI);
+		return SC::IsTypeCompatible(type, from.type, FtoI);
 }
 
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* endT)
@@ -926,7 +942,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 			if (funcRetTypeInfo.type != VarType::kInvalid) {
 				bool FtoI = false;
 
-				if (!funcRetTypeInfo.IsAssignable(typeInfo, FtoI)) {
+				if (!funcRetTypeInfo.IsTypeCompatible(typeInfo, FtoI)) {
 					AddErrorMessage(firstT, "Invalid return type for this function.");
 					delete pNewExp;
 					return false;
@@ -1438,6 +1454,16 @@ bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 	return true;
 }
 
+bool Exp_VariableRef::IsAssignable()
+{
+	if (mpDef->GetVarType() == VarType::kInvalid ||
+		mpDef->GetVarType() == VarType::kVoid)
+		return false;
+	else
+		return true;
+}
+
+
 const Exp_StructDef* Exp_VariableRef::GetStructDef()
 {
 	if (mpDef) 
@@ -1446,6 +1472,10 @@ const Exp_StructDef* Exp_VariableRef::GetStructDef()
 		return NULL;
 }
 
+const Exp_VarDef* Exp_VariableRef::GetVarDef() const
+{
+	return mpDef;
+}
 
 Exp_BuiltInInitializer::Exp_BuiltInInitializer(Exp_ValueEval** pExp, int cnt, VarType tp)
 {
@@ -1581,7 +1611,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 				warnMsg.push_back("Integer implicitly converted to float type.");
 		}
 		if (mOperator == "=") {
-			if (!dynamic_cast<Exp_VariableRef*>(mpLeftExp)) {
+			if (!mpLeftExp->IsAssignable()) {
 				errMsg = "Cannot do assignment with temporary left value.";
 				return false;
 			}
@@ -1657,6 +1687,15 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 		return true;
 
 	}
+}
+
+bool Exp_DotOp::IsAssignable()
+{
+	Exp_VariableRef* pVarDef = dynamic_cast<Exp_VariableRef*>(mpExp);
+	if (pVarDef->GetStructDef() != NULL)
+		return true;
+	else
+		return false;
 }
 
 Exp_FunctionDecl::Exp_FunctionDecl(CodeDomain* parent) :
@@ -1839,7 +1878,7 @@ bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 		TypeInfo funcRetInfo;
 		funcRetInfo.type = mpFuncDecl->GetReturnType(funcRetInfo.pStructDef);
 		bool FtoI = false;
-		if (!funcRetInfo.IsAssignable(outType, FtoI))
+		if (!funcRetInfo.IsTypeCompatible(outType, FtoI))
 			return false;
 		if (FtoI)
 			warnMsg.push_back("Implicit float to int conversion.");
@@ -1874,6 +1913,16 @@ bool Exp_TrueOrFalse::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 	return true;
 }
 
+bool Exp_ValueEval::IsAssignable()
+{
+	return false;
+}
+
+llvm::Value* Exp_ValueEval::GetValuePtr(CG_Context* context)
+{
+	return NULL;
+}
+
 Exp_FunctionCall::Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt)
 {
 	mpFuncDef = pFuncDef;
@@ -1905,7 +1954,7 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 		if (!mInputArgs[i]->CheckSemantic(argTypeInfo, errMsg, warnMsg))
 			return false;
 		bool FtoI = false;
-		if (!pArgDesc->typeInfo.IsAssignable(argTypeInfo, FtoI))
+		if (!pArgDesc->typeInfo.IsTypeCompatible(argTypeInfo, FtoI))
 			return false;
 		if (FtoI)
 			warnMsg.push_back("Implicit float to int conversion.");
@@ -1914,11 +1963,15 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 	return true;
 }
 
-void* CompilingContext::JIT_Function(const std::string& funcName)
+bool CompilingContext::JIT_Compile()
 {
-	return mRootCodeDomain->JIT_Function(funcName);
+	return mRootCodeDomain->JIT_Compile();
 }
 
+void* CompilingContext::GetJITedFuncPtr(const std::string& funcName)
+{
+	return mRootCodeDomain->GetFuncPtrByName(funcName);
+}
 
 #ifdef WANT_MEM_LEAK_CHECK
 int Expression::s_expnCnt = 0;

@@ -140,7 +140,7 @@ int ConvertSwizzle(const char* swizzleStr, int swizzleIdx[4])
 	return cnt;
 }
 
-bool IsAssignable(VarType dest, VarType from, bool& FtoIwarning)
+bool IsTypeCompatible(VarType dest, VarType from, bool& FtoIwarning)
 {
 	bool ret = false;
 	bool destIsI = false;

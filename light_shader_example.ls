@@ -9,17 +9,17 @@ different comments.
 
 struct TestStruct1
 {
-	float3 a; // comment test
+	float a;
 	/* This is commnent  */
-	int2 b, c, d;
-	bool myBool;
-	//float c;
-	//BadType c;
+	float b;
 };
 
 float DistanceSqr(float a, float b)
 {
-	return a*a + b*b;
+	TestStruct1 varStruct;
+	varStruct.a = 3.0;
+	varStruct.b = 4.0;
+	return a*a + b*b + varStruct.a * varStruct.b;
 }
 
 float RetSimpleValue()
@@ -29,7 +29,7 @@ float RetSimpleValue()
 }
 
 
-float2 ReturnFloat2(float a, float b)
+/*float2 ReturnFloat2(float a, float b)
 {
 	return float2(a+b, a*b - a);
 }
@@ -54,7 +54,7 @@ bTest = false;
 	myFloat4 = -myInt3Param2.zyxx;
 	return ReturnFloat2(c, 123.0f).xxyy;
 }
-
+*/
 
 
 /*

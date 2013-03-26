@@ -42,10 +42,12 @@ int main(int argc, char* argv[])
 				break;
 
 		}*/
-		float (*FP)() = (float (*)())(intptr_t)ctx.JIT_Function("RetSimpleValue");
+		ctx.JIT_Compile();
+
+		float (*FP)() = (float (*)())(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
 		float ret = FP();
 
-		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.JIT_Function("DistanceSqr");
+		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
 		ret = FP_Dis(1.5f, 6.3f);
 	}
 	

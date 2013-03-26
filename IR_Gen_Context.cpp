@@ -170,21 +170,34 @@ llvm::Type* CG_Context::NewStructType(const Exp_StructDef* pStructDef)
 }
 
 
-void* RootDomain::JIT_Function(const std::string& funcName)
+bool RootDomain::JIT_Compile()
 {
-	Exp_FunctionDecl* pFuncDecl = GetFunctionDeclByName(funcName);
-	if (!pFuncDecl)
-		return NULL;
+	CG_Context* cgCtx = new CG_Context();
+	for (int i = 0; i < (int)mExpressions.size(); ++i) {
+		llvm::Value* value = mExpressions[i]->GenerateCode(cgCtx);
+		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
+		if (pFuncDecl) {
+			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
+			llvm::verifyFunction(*funcValue);
 
-	llvm::Function* funcValue = (llvm::Function*)(pFuncDecl->GenerateCode(new CG_Context()));
-	if (!funcValue)
-		return NULL;
+			void *funcPtr = CG_Context::TheExecutionEngine->getPointerToFunction(funcValue);
+			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcPtr;
+		}
+	}
 
 	CG_Context::TheModule->dump();
-
-	void *retFuncPtr = CG_Context::TheExecutionEngine->getPointerToFunction(funcValue);
-	return retFuncPtr;
+	return true;
 }
+
+void* RootDomain::GetFuncPtrByName(const std::string& funcName)
+{
+	std::hash_map<std::string, void*>::iterator it = mJITedFuncPtr.find(funcName);
+	if (it != mJITedFuncPtr.end())
+		return it->second;
+	else
+		return NULL;
+}
+
 
 llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, llvm::Value* pL, llvm::Value* pR, bool isFloatType, int vecElemCnt)
 {

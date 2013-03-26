@@ -150,7 +150,7 @@ namespace SC {
 
 		void AddValueExpression(Exp_ValueEval* exp);
 		void AddStructDefExpression(Exp_StructDef* exp);
-		void AddVarDefExpression(Exp_VarDef* exp);
+		virtual void AddVarDefExpression(Exp_VarDef* exp);
 		void AddFunctionDefExpression(Exp_FunctionDecl* exp);
 		void AddDomainExpression(CodeDomain* exp);
 
@@ -190,16 +190,20 @@ namespace SC {
 	private:
 		std::string mStructName;
 		std::hash_map<int, Exp_VarDef*> mIdx2ValueDefs;
+		std::hash_map<std::string, int> mElementName2Idx;
 	public:
 		Exp_StructDef(std::string name, CodeDomain* parentDomain);
 		virtual ~Exp_StructDef();
 		virtual llvm::Value* GenerateCode(CG_Context* context);
-		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
+		virtual void AddVarDefExpression(Exp_VarDef* exp);
 
 		int GetStructSize() const;
 		int GetElementCount() const;
 		const std::string& GetStructureName() const;
 		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef) const;
+		int GetElementIdxByName(const std::string& name) const;
+
+		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
 	class Exp_ValueEval : public Expression
@@ -208,10 +212,12 @@ namespace SC {
 		struct TypeInfo {
 			VarType type;
 			const Exp_StructDef* pStructDef;
-			bool IsAssignable(const TypeInfo& from, bool& FtoI);
+			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI);
 		};
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg) = 0;
+		virtual bool IsAssignable();
+		virtual llvm::Value* GetValuePtr(CG_Context* context);
 	};
 
 	class Exp_Constant : public Exp_ValueEval
@@ -253,8 +259,11 @@ namespace SC {
 		virtual ~Exp_VariableRef();
 		virtual llvm::Value* GenerateCode(CG_Context* context);
 		const Exp_StructDef* GetStructDef();
+		const Exp_VarDef* GetVarDef() const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+		virtual bool IsAssignable();
+		virtual llvm::Value* GetValuePtr(CG_Context* context);
 	};
 
 	class Exp_BuiltInInitializer : public Exp_ValueEval
@@ -308,8 +317,11 @@ namespace SC {
 	public:
 		Exp_DotOp(const std::string& opStr, Exp_ValueEval* pExp);
 		virtual ~Exp_DotOp();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+		virtual bool IsAssignable();
+		virtual llvm::Value* GetValuePtr(CG_Context* context);
 	};
 
 	class Exp_FunctionDecl : public CodeDomain
@@ -379,11 +391,14 @@ namespace SC {
 
 	class RootDomain : public CodeDomain
 	{
+	private:
+		std::hash_map<std::string, void*> mJITedFuncPtr;
 	public:
 		RootDomain();
 		virtual ~RootDomain();
 
-		void* JIT_Function(const std::string& funcName);
+		bool JIT_Compile();
+		void* GetFuncPtrByName(const std::string& funcName);
 	};
 
 
@@ -448,7 +463,8 @@ namespace SC {
 		//
 		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken);
 
-		void* JIT_Function(const std::string& funcName);
+		bool JIT_Compile();
+		void* GetJITedFuncPtr(const std::string& funcName);
 
 	};
 
