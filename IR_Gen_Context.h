@@ -55,7 +55,13 @@ public:
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 	CG_Context* CreateChildContext(Function* pCurFunc);
-	llvm::Value* CreateBinaryExpression(const std::string& opStr, llvm::Value* pL, llvm::Value* pR, bool isFloatType, int vecElemCnt);
+
+	llvm::Value* CastValueType(llvm::Value* srcValue, bool srcIorF, int srcElemCnt, bool destIorF, int destElemCnt);
+
+	llvm::Value* CreateBinaryExpression(const std::string& opStr, 
+		llvm::Value* pL, llvm::Value* pR, 
+		bool isL_FloatType, int vecLeftElemCnt, 
+		bool isR_FloatType, int vecRightElemCnt);
 };
 
 } // namespace SC

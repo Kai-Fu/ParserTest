@@ -91,12 +91,15 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 		return CG_Context::sBuilder.CreateLoad(ptr);
 	}
 	else {
-		Exp_ValueEval::TypeInfo typeInfo;
+		Exp_ValueEval::TypeInfo LtypeInfo, RtypeInfo;
 		std::string errMsg;
 		std::vector<std::string> warnMsg;
-		mpLeftExp->CheckSemantic(typeInfo, errMsg, warnMsg);
-		assert(!typeInfo.pStructDef);
-		return context->CreateBinaryExpression(mOperator, VL, VR, IsFloatType(typeInfo.type), TypeElementCnt(typeInfo.type));
+		mpLeftExp->CheckSemantic(LtypeInfo, errMsg, warnMsg);
+		mpRightExp->CheckSemantic(RtypeInfo, errMsg, warnMsg);
+		assert(!LtypeInfo.pStructDef);
+		return context->CreateBinaryExpression(mOperator, VL, VR, 
+			IsFloatType(LtypeInfo.type), TypeElementCnt(LtypeInfo.type), 
+			IsFloatType(RtypeInfo.type), TypeElementCnt(RtypeInfo.type));
 	}
 	return NULL;
 }

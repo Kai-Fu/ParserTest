@@ -200,45 +200,100 @@ void* RootDomain::GetFuncPtrByName(const std::string& funcName)
 		return NULL;
 }
 
-
-llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, llvm::Value* pL, llvm::Value* pR, bool isFloatType, int vecElemCnt)
+llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, bool srcIorF, int srcElemCnt, bool destIorF, int destElemCnt)
 {
-	if (vecElemCnt == 1) {
-		// For scalar type
-		if (isFloatType) {
-			// Generate instruction for float type
-			if (opStr == "+") 
-				return sBuilder.CreateFAdd(pL, pR);
-			else if (opStr == "-") 
-				return sBuilder.CreateFSub(pL, pR);
-			else if (opStr == "*") 
-				return sBuilder.CreateFMul(pL, pR);
-			else if (opStr == "/") 
-				return sBuilder.CreateFDiv(pL, pR);
+	if (srcElemCnt == 1 && destElemCnt == 1) {
+		//
+		// For scalar types
+		//
+
+		if (srcIorF != destIorF) {
+			if (destIorF)
+				return sBuilder.CreateSIToFP(srcValue, SC_FLOAT_TYPE);
+			else
+				return sBuilder.CreateFPToSI(srcValue, SC_INT_TYPE);
+		}
+		else
+			return srcValue;
+	}
+	else if (srcElemCnt == destElemCnt) {
+		//
+		// For vector types of the same element count
+		//
+
+		if (srcIorF != destIorF) {
+			if (destIorF) {
+				llvm::Type* destType = ConvertToLLVMType(MakeType(destIorF, destElemCnt));
+				return sBuilder.CreateFPToSI(srcValue, destType);
+			}
+			else {
+				llvm::Type* destType = ConvertToLLVMType(MakeType(destIorF, destElemCnt));
+				return sBuilder.CreateSIToFP(srcValue, destType);
+			}
 		}
 		else {
-			// Generate instruction for integer type
-			if (opStr == "+") 
-				return sBuilder.CreateAdd(pL, pR);
-			else if (opStr == "-") 
-				return sBuilder.CreateSub(pL, pR);
-			else if (opStr == "*") 
-				return sBuilder.CreateMul(pL, pR);
-			else if (opStr == "/") 
-				return sBuilder.CreateSDiv(pL, pR);
+			return srcValue;
 		}
+	}
+	else if (srcElemCnt > destElemCnt) {
+
+		//
+		// For vector types of different element count
+		//
+
+		llvm::Value* destValue = NULL;
+		llvm::Type* destType = ConvertToLLVMType(MakeType(destIorF, destElemCnt));
+		llvm::SmallVector<Constant*, 4> Idxs;
+		for (int i = 0; i < destElemCnt; ++i) 
+			Idxs.push_back(sBuilder.getInt32(i));
+		llvm::Value* truncatedValue = sBuilder.CreateShuffleVector(srcValue, llvm::UndefValue::get(srcValue->getType()), llvm::ConstantVector::get(Idxs));
+		if (srcIorF != destIorF) {
+			if (destIorF) {
+				llvm::Type* destType = ConvertToLLVMType(MakeType(destIorF, destElemCnt));
+				return sBuilder.CreateFPToSI(truncatedValue, destType);
+			}
+			else {
+				llvm::Type* destType = ConvertToLLVMType(MakeType(destIorF, destElemCnt));
+				return sBuilder.CreateSIToFP(truncatedValue, destType);
+			}
+		}
+		else
+			return truncatedValue;
+	}
+	else
+		return NULL;
+}
+
+llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, 
+		llvm::Value* pL, llvm::Value* pR, 
+		bool isL_FloatType, int vecLeftElemCnt, 
+		bool isR_FloatType, int vecRightElemCnt)
+{
+	llvm::Value* R_Value = CastValueType(pR, !isL_FloatType, vecLeftElemCnt, !isR_FloatType, vecRightElemCnt);
+	assert(R_Value);
+	if (isL_FloatType) {
+		// Generate instruction for float type
+		if (opStr == "+") 
+			return sBuilder.CreateFAdd(pL, R_Value);
+		else if (opStr == "-") 
+			return sBuilder.CreateFSub(pL, R_Value);
+		else if (opStr == "*") 
+			return sBuilder.CreateFMul(pL, R_Value);
+		else if (opStr == "/") 
+			return sBuilder.CreateFDiv(pL, R_Value);
 	}
 	else {
-		// For vector type
-		if (isFloatType) {
-			// Generate instruction for float vector
-			
-		}
-		else {
-			// Generate instruction for integer vector
-			
-		}
+		// Generate instruction for integer type
+		if (opStr == "+") 
+			return sBuilder.CreateAdd(pL, R_Value);
+		else if (opStr == "-") 
+			return sBuilder.CreateSub(pL, R_Value);
+		else if (opStr == "*") 
+			return sBuilder.CreateMul(pL, R_Value);
+		else if (opStr == "/") 
+			return sBuilder.CreateSDiv(pL, R_Value);
 	}
+	
 	return NULL;
 }
 

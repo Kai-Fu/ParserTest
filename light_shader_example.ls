@@ -28,6 +28,16 @@ float DistanceSqr(float a, float b)
 	return a*a + b*b + varStruct.a * varStruct.s.b;
 }
 
+int TwoIntegerBinary(int a, int b)
+{
+	return a * b;
+}
+
+float FloatAndIntBinary(float a, int b)
+{
+	return a + b;
+}
+
 float RetSimpleValue(TestStruct1& mod)
 {
 	mod.a = 234.888f;

@@ -57,6 +57,12 @@ int main(int argc, char* argv[])
 
 		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
 		ret = FP_Dis(1.5f, 6.3f);
+
+		int (*TwoIntegerBinary)(int a, int b) = (int (*)(int a, int b))(intptr_t)ctx.GetJITedFuncPtr("TwoIntegerBinary");
+		int iRet = TwoIntegerBinary(7, -3);
+
+		float (*FloatAndIntBinary)(float a, int b) = (float (*)(float a, int b))(intptr_t)ctx.GetJITedFuncPtr("FloatAndIntBinary");
+		ret = FloatAndIntBinary(7.123f, -3);
 	}
 	
 
