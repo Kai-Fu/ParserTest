@@ -63,6 +63,10 @@ int main(int argc, char* argv[])
 
 		float (*FloatAndIntBinary)(float a, int b) = (float (*)(float a, int b))(intptr_t)ctx.GetJITedFuncPtr("FloatAndIntBinary");
 		ret = FloatAndIntBinary(7.123f, -3);
+
+		float vData[3];
+		float (*HandleVector)(float* ref) = (float (*)(float* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleVector");
+		ret = HandleVector(vData);
 	}
 	
 

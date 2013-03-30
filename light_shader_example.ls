@@ -47,13 +47,15 @@ float RetSimpleValue(TestStruct1& mod)
 }
 
 
-/*float2 ReturnFloat2(float a, float b)
+float HandleVector(float3& ref)
 {
-	return float2(a+b, a*b - a);
+	float3 a = float3(2.0,3,4.0);
+	ref = a;
+	return 3.14f;
 }
 
 
-
+/*
 float3 simpleFunc(float2& a, float b)
 {
 

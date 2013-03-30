@@ -224,4 +224,26 @@ llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context)
 		return NULL;
 }
 
+llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context)
+{
+	int elemCnt = TypeElementCnt(mType);
+	if (elemCnt == 1)
+		return mpSubExprs[0]->GenerateCode(context);
+	else {
+		llvm::Value* tmpVar = llvm::UndefValue::get(CG_Context::ConvertToLLVMType(mType));
+		for (int i = 0; i < elemCnt; ++i) {
+			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
+			llvm::Value* elemValue = mpSubExprs[i]->GenerateCode(context);
+			TypeInfo elemType;
+			mpSubExprs[i]->CheckSemantic(elemType);
+			if (IsFloatType(mType) && IsIntegerType(elemType.type))
+				elemValue = CG_Context::sBuilder.CreateSIToFP(elemValue, SC_FLOAT_TYPE);
+			else if (IsIntegerType(mType) && IsFloatType(elemType.type))
+				elemValue = CG_Context::sBuilder.CreateFPToSI(elemValue, SC_INT_TYPE);
+			tmpVar = CG_Context::sBuilder.CreateInsertElement(tmpVar, elemValue, idx);
+		}
+		return tmpVar;
+	}
+}
+
 } // namespace SC

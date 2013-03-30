@@ -215,7 +215,7 @@ namespace SC {
 			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI);
 		};
 
-		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg) = 0;
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg = std::string(), std::vector<std::string>& warnMsg = std::vector<std::string>()) = 0;
 		virtual bool IsAssignable();
 		virtual llvm::Value* GetValuePtr(CG_Context* context);
 	};
@@ -275,6 +275,7 @@ namespace SC {
 	public:
 		Exp_BuiltInInitializer(Exp_ValueEval** pExp, int cnt, VarType tp);
 		virtual ~Exp_BuiltInInitializer();
+		virtual llvm::Value* GenerateCode(CG_Context* context);
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
