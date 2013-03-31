@@ -47,6 +47,24 @@ bool IsIntegerType(VarType type)
 	return false;
 }
 
+bool IsValueType(VarType type)
+{
+	switch (type) {
+	case kFloat:
+	case kFloat2:
+	case kFloat3:
+	case kFloat4:
+
+	case kInt:
+	case kInt2:
+	case kInt3:
+	case kInt4:
+	case kBoolean:
+		return true;
+	}
+	return false;
+}
+
 int TypeElementCnt(VarType type)
 {
 	switch (type) {

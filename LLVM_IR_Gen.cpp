@@ -202,11 +202,9 @@ void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) con
 llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 {
 	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	std::string errMsg;
-	std::vector<std::string> warnMsg;
-	Exp_ValueEval::TypeInfo typeInfo;
-	typeInfo = mpExp->GetCachedTypeInfo();
-	const Exp_StructDef* pStructDef = typeInfo.pStructDef;
+	Exp_ValueEval::TypeInfo parentTypeInfo;
+	parentTypeInfo = mpExp->GetCachedTypeInfo();
+	const Exp_StructDef* pStructDef = parentTypeInfo.pStructDef;
 	llvm::Value* dataPtr = NULL;
 	vecElemIdx = -1;
 	if (pVarRef) {
@@ -214,7 +212,7 @@ llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 		std::string& refName = pVarRef->GetVarDef()->GetVarName().ToStdString();
 		dataPtr = context->GetVariablePtr(refName, true);
 		if (!pVarRef->GetStructDef()) {
-			int elemCnt = TypeElementCnt(pVarRef->GetCachedTypeInfo().type);
+			int elemCnt = TypeElementCnt(GetCachedTypeInfo().type);
 			if (elemCnt != 1)
 				return NULL;
 			else {
@@ -234,7 +232,7 @@ llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 			return NULL;
 	}
 
-	if (vecElemIdx != -1) {
+	if (vecElemIdx == -1) {
 		std::vector<llvm::Value*> indices(2);
 		indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
 		indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
@@ -252,7 +250,7 @@ llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
 	if (dataPtr) {
 		
 		llvm::Value* ret = CG_Context::sBuilder.CreateLoad(dataPtr);
-		if  (firstElemIdx == -1) {
+		if  (firstElemIdx != -1) {
 			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)firstElemIdx));
 			ret = CG_Context::sBuilder.CreateExtractElement(ret, idx);
 		}
@@ -264,8 +262,8 @@ llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
 		int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
 		llvm::SmallVector<Constant*, 4> Idxs;
 		for (int i = 0; i < elemCnt; ++i) 
-			Idxs.push_back(CG_Context::sBuilder.getInt32(i));
-		llvm::Value* srcValue = CG_Context::sBuilder.CreateLoad(dataPtr);
+			Idxs.push_back(CG_Context::sBuilder.getInt32(swizzleIdx[i]));
+		llvm::Value* srcValue = mpExp->GenerateCode(context);
 		llvm::Value* swizzledValue = CG_Context::sBuilder.CreateShuffleVector(srcValue, llvm::UndefValue::get(srcValue->getType()), llvm::ConstantVector::get(Idxs));
 		return swizzledValue;
 	}

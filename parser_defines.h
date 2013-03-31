@@ -31,6 +31,7 @@ namespace SC {
 	bool IsBuiltInType(VarType type);
 	bool IsFloatType(VarType type);
 	bool IsIntegerType(VarType type);
+	bool IsValueType(VarType type);
 	int TypeElementCnt(VarType type);
 	int TypeSize(VarType type);
 	VarType MakeType(bool I_or_F, int elemCnt);
