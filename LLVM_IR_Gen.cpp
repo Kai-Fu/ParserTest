@@ -18,14 +18,14 @@ using namespace llvm;
 
 namespace SC {
 
-llvm::Value* Expression::GenerateCode(CG_Context* context)
+llvm::Value* Expression::GenerateCode(CG_Context* context) const
 {
 	// Should not reach here
 	assert(0);
 	return NULL;
 }
 
-llvm::Value* Exp_Constant::GenerateCode(CG_Context* context)
+llvm::Value* Exp_Constant::GenerateCode(CG_Context* context) const
 {
 	if (mIsFromFloat) 
 		return ConstantFP::get(getGlobalContext(), APFloat((Float)mValue));
@@ -33,7 +33,7 @@ llvm::Value* Exp_Constant::GenerateCode(CG_Context* context)
 		return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)mValue, true));
 }
 
-llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
+llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context) const
 {
 	std::string varName = mVarName.ToStdString();
 	llvm::Value* varPtr = context->NewVariable(this, NULL);
@@ -44,23 +44,23 @@ llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context)
 	return varPtr;
 }
 
-llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context)
+llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context) const
 {
 	context->NewStructType(this);
 	return NULL;
 }
 
-llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context)
+llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context) const
 {
 	return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, mValue ? 1 : 0));
 }
 
-llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context)
+llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context) const
 {
 	return context->GetVariableValue(mVariable.ToStdString(), true);
 }
 
-llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context)
+llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context) const
 {
 	if (mOpType == "!")
 		return CG_Context::sBuilder.CreateNot(mpExpr->GenerateCode(context));
@@ -73,29 +73,28 @@ llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context)
 }
 
 
-llvm::Value* Exp_VariableRef::GetValuePtr(CG_Context* context)
+void Exp_VariableRef::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
 	llvm::Value* varPtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
-	return varPtr;
+	CG_Context::sBuilder.CreateStore(pValue, varPtr);
 }
 
-llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
+
+llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context) const
 {
-	llvm::Value* VL = mpLeftExp->GenerateCode(context);
 	llvm::Value* VR = mpRightExp->GenerateCode(context);
-	if (!VL || !VR)
+	if (!VR)
 		return NULL;
 	if (mOperator == "=") {
-		llvm::Value* ptr = mpLeftExp->GetValuePtr(context);
-		CG_Context::sBuilder.CreateStore(VR, ptr);
-		return CG_Context::sBuilder.CreateLoad(ptr);
+		mpLeftExp->GenerateAssignCode(context, VR);
+		llvm::Value* VL = mpLeftExp->GenerateCode(context);
+		return VL;
 	}
 	else {
+		llvm::Value* VL = mpLeftExp->GenerateCode(context);
 		Exp_ValueEval::TypeInfo LtypeInfo, RtypeInfo;
-		std::string errMsg;
-		std::vector<std::string> warnMsg;
-		mpLeftExp->CheckSemantic(LtypeInfo, errMsg, warnMsg);
-		mpRightExp->CheckSemantic(RtypeInfo, errMsg, warnMsg);
+		LtypeInfo = mpLeftExp->GetCachedTypeInfo();
+		RtypeInfo = mpRightExp->GetCachedTypeInfo();
 		assert(!LtypeInfo.pStructDef);
 		return context->CreateBinaryExpression(mOperator, VL, VR, 
 			IsFloatType(LtypeInfo.type), TypeElementCnt(LtypeInfo.type), 
@@ -104,7 +103,7 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context)
 	return NULL;
 }
 
-llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
+llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 {
 	// handle the argument types
 	std::vector<llvm::Type*> funcArgTypes(mArgments.size());
@@ -169,7 +168,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context)
 	return F;
 }
 
-llvm::Value* CodeDomain::GenerateCode(CG_Context* context)
+llvm::Value* CodeDomain::GenerateCode(CG_Context* context) const
 {
 	CG_Context* domain_ctx = context->CreateChildContext(context->GetCurrentFunc());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
@@ -178,53 +177,101 @@ llvm::Value* CodeDomain::GenerateCode(CG_Context* context)
 	return NULL; // the domain doesn't have the value to return
 }
 
-llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context)
+llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context) const
 {
 	llvm::Value* retVal = mpRetValue->GenerateCode(context);
 	assert(retVal);
 	return CG_Context::sBuilder.CreateRet(retVal);
 }
 
-llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context)
+void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
+{
+	int vecElemIdx = -1;
+	llvm::Value* pVarPtr = GetValuePtr(context, vecElemIdx);
+	assert(pVarPtr);
+	if (vecElemIdx == -1) {
+		CG_Context::sBuilder.CreateStore(pValue, pVarPtr);
+	}
+	else {
+		llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)vecElemIdx));
+		llvm::Value* updatedValue = CG_Context::sBuilder.CreateInsertElement(CG_Context::sBuilder.CreateLoad(pVarPtr), pValue, idx);
+		CG_Context::sBuilder.CreateStore(updatedValue, pVarPtr);
+	}
+}
+
+llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 {
 	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
 	std::string errMsg;
 	std::vector<std::string> warnMsg;
 	Exp_ValueEval::TypeInfo typeInfo;
-	mpExp->CheckSemantic(typeInfo, errMsg, warnMsg);
+	typeInfo = mpExp->GetCachedTypeInfo();
 	const Exp_StructDef* pStructDef = typeInfo.pStructDef;
 	llvm::Value* dataPtr = NULL;
-	if (pVarRef && typeInfo.pStructDef) {
-		// This expression is only assignable when it is accessing the structure's member.
+	vecElemIdx = -1;
+	if (pVarRef) {
+		
 		std::string& refName = pVarRef->GetVarDef()->GetVarName().ToStdString();
 		dataPtr = context->GetVariablePtr(refName, true);
+		if (!pVarRef->GetStructDef()) {
+			int elemCnt = TypeElementCnt(pVarRef->GetCachedTypeInfo().type);
+			if (elemCnt != 1)
+				return NULL;
+			else {
+				int swizzleIdx[4];
+				ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
+				vecElemIdx = swizzleIdx[0];
+			}
+		}
+
 	}
 	else {
 		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
 		if (pDotOp) {
-			dataPtr = pDotOp->GetValuePtr(context);
+			dataPtr = pDotOp->GetValuePtr(context, vecElemIdx);
 		}
 		else
 			return NULL;
 	}
 
-	std::vector<llvm::Value*> indices(2);
-	indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
-	indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
-	return CG_Context::sBuilder.CreateGEP(dataPtr, indices);
-}
-
-llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context)
-{
-	llvm::Value* dataPtr = GetValuePtr(context);
-	if (dataPtr) {
-		return CG_Context::sBuilder.CreateLoad(dataPtr);
+	if (vecElemIdx != -1) {
+		std::vector<llvm::Value*> indices(2);
+		indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+		indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
+		return CG_Context::sBuilder.CreateGEP(dataPtr, indices);
 	}
-	else 
-		return NULL;
+	else {
+		return dataPtr;
+	}
 }
 
-llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context)
+llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
+{
+	int firstElemIdx = -1;
+	llvm::Value* dataPtr = GetValuePtr(context, firstElemIdx);
+	if (dataPtr) {
+		
+		llvm::Value* ret = CG_Context::sBuilder.CreateLoad(dataPtr);
+		if  (firstElemIdx == -1) {
+			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)firstElemIdx));
+			ret = CG_Context::sBuilder.CreateExtractElement(ret, idx);
+		}
+		return ret;
+	}
+	else {
+		// It should be a vector swizzling
+		int swizzleIdx[4];
+		int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
+		llvm::SmallVector<Constant*, 4> Idxs;
+		for (int i = 0; i < elemCnt; ++i) 
+			Idxs.push_back(CG_Context::sBuilder.getInt32(i));
+		llvm::Value* srcValue = CG_Context::sBuilder.CreateLoad(dataPtr);
+		llvm::Value* swizzledValue = CG_Context::sBuilder.CreateShuffleVector(srcValue, llvm::UndefValue::get(srcValue->getType()), llvm::ConstantVector::get(Idxs));
+		return swizzledValue;
+	}
+}
+
+llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context) const
 {
 	int elemCnt = TypeElementCnt(mType);
 	if (elemCnt == 1)
@@ -234,8 +281,7 @@ llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context)
 		for (int i = 0; i < elemCnt; ++i) {
 			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
 			llvm::Value* elemValue = mpSubExprs[i]->GenerateCode(context);
-			TypeInfo elemType;
-			mpSubExprs[i]->CheckSemantic(elemType);
+			TypeInfo elemType = mpSubExprs[i]->GetCachedTypeInfo();
 			if (IsFloatType(mType) && IsIntegerType(elemType.type))
 				elemValue = CG_Context::sBuilder.CreateSIToFP(elemValue, SC_FLOAT_TYPE);
 			else if (IsIntegerType(mType) && IsFloatType(elemType.type))

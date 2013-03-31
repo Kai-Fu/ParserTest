@@ -1433,6 +1433,7 @@ bool Exp_Constant::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 {
 	outType.type = mIsFromFloat ? VarType::kFloat : VarType::kInt;
 	outType.pStructDef = NULL;
+	mCachedTypeInfo = outType;
 	return true;
 }
 
@@ -1451,10 +1452,11 @@ bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 {
 	outType.type = mpDef->GetVarType();
 	outType.pStructDef = mpDef->GetStructDef();
+	mCachedTypeInfo = outType;
 	return true;
 }
 
-bool Exp_VariableRef::IsAssignable()
+bool Exp_VariableRef::IsAssignable() const
 {
 	if (mpDef->GetVarType() == VarType::kInvalid ||
 		mpDef->GetVarType() == VarType::kVoid)
@@ -1462,7 +1464,6 @@ bool Exp_VariableRef::IsAssignable()
 	else
 		return true;
 }
-
 
 const Exp_StructDef* Exp_VariableRef::GetStructDef()
 {
@@ -1531,6 +1532,7 @@ bool Exp_BuiltInInitializer::CheckSemantic(TypeInfo& outType, std::string& errMs
 	}
 	outType.type = mType;
 	outType.pStructDef = NULL;
+	mCachedTypeInfo = outType;
 	return true;
 }
 
@@ -1560,6 +1562,7 @@ bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 		return false;
 	}
 
+	mCachedTypeInfo = outType;
 	return true;
 }
 
@@ -1580,6 +1583,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 			else {
 				outType.pStructDef = leftType.pStructDef;
 				outType.type = VarType::kStructure;
+				mCachedTypeInfo = outType;
 				return true;
 			}
 		}
@@ -1619,6 +1623,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 
 		outType.pStructDef = NULL;
 		outType.type = leftType.type;
+		mCachedTypeInfo = outType;
+		mCachedTypeInfo = outType;
 		return true;
 	}
 	
@@ -1626,6 +1632,12 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		if (leftType.type != VarType::kBoolean || rightType.type != VarType::kBoolean) {
 			errMsg = "Cannot do logic operation with non-boolean types.";
 			return false;
+		}
+		else {
+			outType.type = VarType::kBoolean;
+			outType.pStructDef = NULL;
+			mCachedTypeInfo = outType;
+			return true;
 		}
 	}
 
@@ -1658,7 +1670,6 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 				outType.pStructDef = pDef->GetStructDef();
 			else
 				outType.pStructDef = NULL;
-			return true;
 		}
 		else {
 			errMsg = "Invalid structure member name.";
@@ -1666,7 +1677,7 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 		}
 	}
 	else {
-		// TODO: The dotOp is the swizzle operation.
+		// The dotOp is the swizzle operation.
 		int swizzleIdx[4];
 		int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
 		if (elemCnt <= 0) {
@@ -1684,16 +1695,30 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 
 		outType.type = MakeType(IsIntegerType(parentType.type), elemCnt);
 		outType.pStructDef = NULL;
-		return true;
 
 	}
+	mCachedTypeInfo = outType;
+	return true;
 }
 
-bool Exp_DotOp::IsAssignable()
+bool Exp_DotOp::IsAssignable() const
 {
 	Exp_VariableRef* pVarDef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	if (pVarDef && pVarDef->GetStructDef() != NULL)
-		return true;
+	if (pVarDef) {
+		if (pVarDef->GetStructDef() != NULL) {
+			// The structure member access should already checked in previous calll to CheckSemantic()
+			return true; 
+		}
+		else {
+			int swizzleIdx[4];
+			int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
+			if (elemCnt == 1) {
+				// The validity of the swizzling is already checked in CheckSemantic(), so here if the swizzling is for one element,
+				// then it should be asssume as assignable.
+				return true;
+			}
+		}
+	}
 	else {
 		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
 		if (pDotOp && pDotOp->IsAssignable())
@@ -1887,13 +1912,15 @@ bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 			return false;
 		if (FtoI)
 			warnMsg.push_back("Implicit float to int conversion.");
-		return true;
+
 	}
 	else {
 		outType.type = VarType::kVoid;
 		outType.pStructDef = NULL;
-		return true;
 	}
+
+	mCachedTypeInfo = outType;
+	return true;
 }
 
 Exp_TrueOrFalse::Exp_TrueOrFalse(bool value)
@@ -1915,17 +1942,28 @@ bool Exp_TrueOrFalse::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 {
 	outType.type = VarType::kBoolean;
 	outType.pStructDef = NULL;
+	mCachedTypeInfo = outType;
 	return true;
 }
 
-bool Exp_ValueEval::IsAssignable()
+Exp_ValueEval::Exp_ValueEval()
+{
+	mCachedTypeInfo.type = VarType::kInvalid;
+	mCachedTypeInfo.pStructDef = NULL;
+}
+
+Exp_ValueEval::TypeInfo Exp_ValueEval::GetCachedTypeInfo() const
+{
+	return mCachedTypeInfo;
+}
+
+bool Exp_ValueEval::IsAssignable() const
 {
 	return false;
 }
 
-llvm::Value* Exp_ValueEval::GetValuePtr(CG_Context* context)
+void Exp_ValueEval::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
-	return NULL;
 }
 
 Exp_FunctionCall::Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt)
@@ -1965,6 +2003,7 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 			warnMsg.push_back("Implicit float to int conversion.");
 	}
 	outType.type = mpFuncDef->GetReturnType(outType.pStructDef);
+	mCachedTypeInfo = outType;
 	return true;
 }
 
