@@ -96,9 +96,7 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context) const
 		LtypeInfo = mpLeftExp->GetCachedTypeInfo();
 		RtypeInfo = mpRightExp->GetCachedTypeInfo();
 		assert(!LtypeInfo.pStructDef);
-		return context->CreateBinaryExpression(mOperator, VL, VR, 
-			IsFloatType(LtypeInfo.type), TypeElementCnt(LtypeInfo.type), 
-			IsFloatType(RtypeInfo.type), TypeElementCnt(RtypeInfo.type));
+		return context->CreateBinaryExpression(mOperator, VL, VR,LtypeInfo.type, RtypeInfo.type); 
 	}
 	return NULL;
 }
@@ -272,21 +270,43 @@ llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
 llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context) const
 {
 	int elemCnt = TypeElementCnt(mType);
-	if (elemCnt == 1)
-		return mpSubExprs[0]->GenerateCode(context);
+
+	if (elemCnt == 1) {
+		llvm::Value* tmpVar = mpSubExprs[0]->GenerateCode(context);
+		return context->CastValueType(tmpVar, mpSubExprs[0]->GetCachedTypeInfo().type, mType);
+	}
 	else {
-		llvm::Value* tmpVar = llvm::UndefValue::get(CG_Context::ConvertToLLVMType(mType));
-		for (int i = 0; i < elemCnt; ++i) {
-			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
-			llvm::Value* elemValue = mpSubExprs[i]->GenerateCode(context);
-			TypeInfo elemType = mpSubExprs[i]->GetCachedTypeInfo();
-			if (IsFloatType(mType) && IsIntegerType(elemType.type))
-				elemValue = CG_Context::sBuilder.CreateSIToFP(elemValue, SC_FLOAT_TYPE);
-			else if (IsIntegerType(mType) && IsFloatType(elemType.type))
-				elemValue = CG_Context::sBuilder.CreateFPToSI(elemValue, SC_INT_TYPE);
-			tmpVar = CG_Context::sBuilder.CreateInsertElement(tmpVar, elemValue, idx);
+		int elemIdx = 0;
+		llvm::Value* outVar = llvm::UndefValue::get(CG_Context::ConvertToLLVMType(mType));
+		for (int exp_i = 0; exp_i < 4; ++exp_i) {
+			if (mpSubExprs[exp_i] == NULL)
+				break;
+			llvm::Value* tmpVar = mpSubExprs[exp_i]->GenerateCode(context);
+			VarType subType = mpSubExprs[exp_i]->GetCachedTypeInfo().type;
+			int subElemCnt = TypeElementCnt(subType);
+			
+			VarType destElemType = IsIntegerType(mType) ? VarType::kInt : VarType::kFloat;
+			VarType srcElemType = IsIntegerType(subType) ? VarType::kInt : VarType::kFloat;
+			if (subElemCnt > 1) {
+				for (int i = 0; i < subElemCnt; ++i) {
+					llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
+					llvm::Value* elemValue = CG_Context::sBuilder.CreateExtractElement(tmpVar, idx);
+					elemValue = context->CastValueType(elemValue, srcElemType, destElemType);
+
+					idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)elemIdx++));
+					outVar = CG_Context::sBuilder.CreateInsertElement(outVar, elemValue, idx);
+				}
+			}
+			else {
+				llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)elemIdx++));
+				llvm::Value* elemValue = tmpVar;
+				elemValue = context->CastValueType(elemValue, subType, destElemType);
+
+				outVar = CG_Context::sBuilder.CreateInsertElement(outVar, elemValue, idx);
+			}
 		}
-		return tmpVar;
+		
+		return outVar;
 	}
 }
 

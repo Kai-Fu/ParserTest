@@ -200,8 +200,14 @@ void* RootDomain::GetFuncPtrByName(const std::string& funcName)
 		return NULL;
 }
 
-llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, bool srcIorF, int srcElemCnt, bool destIorF, int destElemCnt)
+llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, VarType srcType, VarType destType)
 {
+
+	bool srcIorF = IsIntegerType(srcType);
+	int srcElemCnt = TypeElementCnt(srcType);
+	bool destIorF = IsIntegerType(destType);
+	int destElemCnt = TypeElementCnt(destType);
+
 	if (srcElemCnt == 1 && destElemCnt == 1) {
 		//
 		// For scalar types
@@ -209,9 +215,9 @@ llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, bool srcIorF, int 
 
 		if (srcIorF != destIorF) {
 			if (destIorF)
-				return sBuilder.CreateSIToFP(srcValue, SC_FLOAT_TYPE);
-			else
 				return sBuilder.CreateFPToSI(srcValue, SC_INT_TYPE);
+			else
+				return sBuilder.CreateSIToFP(srcValue, SC_FLOAT_TYPE);
 		}
 		else
 			return srcValue;
@@ -265,13 +271,11 @@ llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, bool srcIorF, int 
 }
 
 llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, 
-		llvm::Value* pL, llvm::Value* pR, 
-		bool isL_FloatType, int vecLeftElemCnt, 
-		bool isR_FloatType, int vecRightElemCnt)
+		llvm::Value* pL, llvm::Value* pR, VarType Ltype, VarType Rtype)
 {
-	llvm::Value* R_Value = CastValueType(pR, !isL_FloatType, vecLeftElemCnt, !isR_FloatType, vecRightElemCnt);
+	llvm::Value* R_Value = CastValueType(pR, Rtype, Ltype);
 	assert(R_Value);
-	if (isL_FloatType) {
+	if (IsFloatType(Ltype)) {
 		// Generate instruction for float type
 		if (opStr == "+") 
 			return sBuilder.CreateFAdd(pL, R_Value);

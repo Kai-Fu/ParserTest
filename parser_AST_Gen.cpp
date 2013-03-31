@@ -126,6 +126,8 @@ bool Token::IsEOF() const
 
 bool Token::IsEqual(const char* dest) const
 {
+	if (dest == NULL)
+		return false;
 	size_t len = strlen(dest);
 	if (len != mNumOfChar)
 		return false;
@@ -1246,7 +1248,7 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 	if (curT.GetType() == Token::kIdentifier) {
 		// This identifier must be a already defined variable, built-in type or constant
 		TypeDesc tpDesc;
-		if (IsBuiltInType(curT, &tpDesc)) {
+		if (IsBuiltInType(curT, &tpDesc) && (IsFloatType(tpDesc.type) || IsIntegerType(tpDesc.type))) {
 			// Parse and return the built-in type initialize
 			if (!ExpectAndEat("(")) return NULL;
 
@@ -1255,9 +1257,11 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			bool succeed = false;
 			Token lastT;
 			for (int i = 0; i < tpDesc.elemCnt; ++i) {
-				exp[i].reset(ParseComplexExpression(curDomain, i == (tpDesc.elemCnt - 1) ? ")" : ","));
+				exp[i].reset(ParseComplexExpression(curDomain, ")", ","));
 				if (!exp[i].get()) return NULL;
-				GetNextToken(); // Eat the end token(")" or ",")
+				// Eat the end token ")" or ","
+				if (GetNextToken().IsEqual(")")) 
+					break;
 			}
 
 			Exp_ValueEval* expArray[4] = {exp[0].get(), exp[1].get(), exp[2].get(), exp[3].get()};
@@ -1347,7 +1351,7 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 	return result.release();
 }
 
-Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken)
+Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken0, const char* pEndToken1)
 {
 	Exp_ValueEval* simpleExp0 = ParseSimpleExpression(curDomain);
 	if (!simpleExp0) {
@@ -1358,7 +1362,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 
 	Exp_ValueEval* ret = NULL;
 	Token curT = PeekNextToken(0);
-	if (curT.IsEqual(pEndToken)) {
+	if (curT.IsEqual(pEndToken0) || curT.IsEqual(pEndToken1)) {
 		ret = simpleExp0;
 	}
 	else {
@@ -1380,7 +1384,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 
 		Token nextT = PeekNextToken(0);
 		// Get the next token to decide if the next binary operator is in high level of priority
-		if (nextT.IsEqual(pEndToken)) {
+		if (nextT.IsEqual(pEndToken0) || nextT.IsEqual(pEndToken1)) {
 			// we are done for this complex value expression, return it.
 			Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
 			ret = pBinaryOp;
@@ -1392,7 +1396,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 			std::string op1_str = nextT.ToStdString();
 
 			if (op1_level > op0_level) {
-				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
+				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken0, pEndToken1);
 				if (simpleExp2) {
 					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
 					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
@@ -1400,7 +1404,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 				}
 			}
 			else {
-				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken);
+				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken0, pEndToken1);
 				if (simpleExp2) {
 					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
 					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, pBinaryOp0, simpleExp2);
@@ -1512,11 +1516,11 @@ bool Exp_BuiltInInitializer::CheckSemantic(TypeInfo& outType, std::string& errMs
 			TypeInfo typeInfo;
 			if (!curExp->CheckSemantic(typeInfo, errMsg, warnMsg)) 
 				return false;
-			if (!IsBuiltInType(typeInfo.type)) {
-				errMsg = "Must be built-in type.";
+			if (!IsFloatType(typeInfo.type) && !IsIntegerType(typeInfo.type)) {
+				errMsg = "Must be float or integer types.";
 				return false;
 			}
-			if (!IsIntegerType(typeInfo.type))
+			if (IsFloatType(typeInfo.type))
 				hasFloat = true;
 			ElemCntGiven += TypeElementCnt(typeInfo.type);
 		}
@@ -1731,6 +1735,8 @@ bool Exp_DotOp::IsAssignable() const
 				// then it should be asssume as assignable.
 				return true;
 			}
+			else
+				return false;
 		}
 	}
 	else {

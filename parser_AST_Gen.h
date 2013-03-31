@@ -467,7 +467,7 @@ namespace SC {
 		Exp_ValueEval* ParseSimpleExpression(CodeDomain* curDomain);
 		// Complex expression means it contains any simple expression and binary operation.
 		//
-		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken);
+		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken0, const char* pEndToken1 = NULL);
 
 		bool JIT_Compile();
 		void* GetJITedFuncPtr(const std::string& funcName);

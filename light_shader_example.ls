@@ -49,9 +49,11 @@ float RetSimpleValue(TestStruct1& mod)
 
 float HandleVector(float3& ref)
 {
-	float3 a = float3(2.0,3,4.0);
+	float3 a = float3(2.0, 3.0, 4.0);
+	float4 b = float4(a, 123);
 	ref = a.zyx;
 	ref.y = 145.6;
+	ref.z = b.w;
 	return 3.14f;
 }
 
