@@ -45,7 +45,7 @@ float RetSimpleValue(TestStruct1& mod)
 {
 	mod.a = 234.888f;
 	mod.b = 678.9;
-	mod.cond = (mod.a < mod.b) == false;
+	mod.cond = (mod.a < mod.b && 123 > 123.8);
 	float var = 123.891f + 321.0f;
 	return var;
 }

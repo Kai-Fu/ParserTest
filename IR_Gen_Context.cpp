@@ -203,9 +203,9 @@ void* RootDomain::GetFuncPtrByName(const std::string& funcName)
 llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, VarType srcType, VarType destType)
 {
 
-	bool srcIorF = IsIntegerType(srcType);
+	bool srcIorF = !IsFloatType(srcType);
 	int srcElemCnt = TypeElementCnt(srcType);
-	bool destIorF = IsIntegerType(destType);
+	bool destIorF = !IsFloatType(destType);
 	int destElemCnt = TypeElementCnt(destType);
 
 	if (srcElemCnt == 1 && destElemCnt == 1) {
@@ -316,6 +316,10 @@ llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr,
 			return sBuilder.CreateICmpSLE(pL, R_Value);
 		else if (opStr == "==") 
 			return sBuilder.CreateICmpEQ(pL, R_Value);
+		else if (opStr == "||") 
+			return sBuilder.CreateOr(pL, R_Value); // boolean values are treated as i1 integer
+		else if (opStr == "&&") 
+			return sBuilder.CreateAnd(pL, R_Value); // boolean values are treated as i1 integer
 	}
 	
 	return NULL;
