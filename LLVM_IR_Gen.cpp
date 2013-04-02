@@ -52,12 +52,18 @@ llvm::Value* Exp_StructDef::GenerateCode(CG_Context* context) const
 
 llvm::Value* Exp_TrueOrFalse::GenerateCode(CG_Context* context) const
 {
-	return Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, mValue ? 1 : 0));
+	return Constant::getIntegerValue(SC_INT_TYPE, APInt(/* Only one bit*/1, mValue ? 1 : 0));
 }
 
 llvm::Value* Exp_VariableRef::GenerateCode(CG_Context* context) const
 {
-	return context->GetVariableValue(mVariable.ToStdString(), true);
+	if (mpDef->GetVarType() == VarType::kBoolean) {
+		llvm::Value* intValue = context->GetVariableValue(mVariable.ToStdString(), true);
+		llvm::Value* falseValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+		return CG_Context::sBuilder.CreateICmpNE(intValue, falseValue);
+	}
+	else
+		return context->GetVariableValue(mVariable.ToStdString(), true);
 }
 
 llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context) const
@@ -76,7 +82,14 @@ llvm::Value* Exp_UnaryOp::GenerateCode(CG_Context* context) const
 void Exp_VariableRef::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
 	llvm::Value* varPtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
-	CG_Context::sBuilder.CreateStore(pValue, varPtr);
+	if (mpDef->GetVarType() == VarType::kBoolean) {
+		llvm::Value* falseValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+		llvm::Value* trueValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)1));
+		llvm::Value* thisBoolValue = CG_Context::sBuilder.CreateSelect(pValue, trueValue, falseValue);
+		CG_Context::sBuilder.CreateStore(thisBoolValue, varPtr);
+	}
+	else
+		CG_Context::sBuilder.CreateStore(pValue, varPtr);
 }
 
 
@@ -96,8 +109,10 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context) const
 		LtypeInfo = mpLeftExp->GetCachedTypeInfo();
 		RtypeInfo = mpRightExp->GetCachedTypeInfo();
 		assert(!LtypeInfo.pStructDef);
+
 		return context->CreateBinaryExpression(mOperator, VL, VR,LtypeInfo.type, RtypeInfo.type); 
 	}
+
 	return NULL;
 }
 
@@ -188,7 +203,14 @@ void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) con
 	llvm::Value* pVarPtr = GetValuePtr(context, vecElemIdx);
 	assert(pVarPtr);
 	if (vecElemIdx == -1) {
-		CG_Context::sBuilder.CreateStore(pValue, pVarPtr);
+		if (GetCachedTypeInfo().type == VarType::kBoolean) {
+			llvm::Value* falseValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			llvm::Value* trueValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)1));
+			llvm::Value* intValue = CG_Context::sBuilder.CreateSelect(pValue, trueValue, falseValue);
+			CG_Context::sBuilder.CreateStore(intValue, pVarPtr);
+		}
+		else
+			CG_Context::sBuilder.CreateStore(pValue, pVarPtr);
 	}
 	else {
 		llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)vecElemIdx));

@@ -8,7 +8,7 @@
 struct TestStruct1
 {
 	float a;
-	/* This is commnent  */
+	int cond;
 	float b;
 };
 
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 
 		}*/
 		ctx.JIT_Compile();
-		TestStruct1 mod = {0.0f, 0.0f};
+		TestStruct1 mod = {0.0f, 1234, 0.0f};
 		float (*FP)(TestStruct1* a) = (float (*)(TestStruct1* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
 		float ret = FP(&mod);
 

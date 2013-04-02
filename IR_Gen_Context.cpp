@@ -285,6 +285,16 @@ llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr,
 			return sBuilder.CreateFMul(pL, R_Value);
 		else if (opStr == "/") 
 			return sBuilder.CreateFDiv(pL, R_Value);
+		else if (opStr == ">") 
+			return sBuilder.CreateFCmpOGT(pL, R_Value);
+		else if (opStr == ">=") 
+			return sBuilder.CreateFCmpOGE(pL, R_Value);
+		else if (opStr == "<") 
+			return sBuilder.CreateFCmpOLT(pL, R_Value);
+		else if (opStr == "<=") 
+			return sBuilder.CreateFCmpOLE(pL, R_Value);
+		else if (opStr == "==") 
+			return sBuilder.CreateFCmpOEQ(pL, R_Value);
 	}
 	else {
 		// Generate instruction for integer type
@@ -296,6 +306,16 @@ llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr,
 			return sBuilder.CreateMul(pL, R_Value);
 		else if (opStr == "/") 
 			return sBuilder.CreateSDiv(pL, R_Value);
+		else if (opStr == ">") 
+			return sBuilder.CreateICmpSGT(pL, R_Value);
+		else if (opStr == ">=") 
+			return sBuilder.CreateICmpSGE(pL, R_Value);
+		else if (opStr == "<") 
+			return sBuilder.CreateICmpSLT(pL, R_Value);
+		else if (opStr == "<=") 
+			return sBuilder.CreateICmpSLE(pL, R_Value);
+		else if (opStr == "==") 
+			return sBuilder.CreateICmpEQ(pL, R_Value);
 	}
 	
 	return NULL;

@@ -99,12 +99,11 @@ int Token::GetBinaryOpLevel() const
 			return 50;
 		}
 	}
-	else {
-		if (IsEqual("||") || IsEqual("&&"))
-			return 70;
-		else if (IsEqual("=="))
-			return 80;
-	}
+
+	if (IsEqual("||") || IsEqual("&&"))
+		return 70;
+	else if (IsEqual("==") || IsEqual(">=") || IsEqual(">") || IsEqual("<=") || IsEqual("<"))
+		return 80;
 
 	return 0;
 }
@@ -255,7 +254,9 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 		_isFirstN_Equal(mCurParsingPtr, "--") ||
 		_isFirstN_Equal(mCurParsingPtr, "||") ||
 		_isFirstN_Equal(mCurParsingPtr, "&&") ||
-		_isFirstN_Equal(mCurParsingPtr, "==") ) {
+		_isFirstN_Equal(mCurParsingPtr, "==") ||
+		_isFirstN_Equal(mCurParsingPtr, ">=") ||
+		_isFirstN_Equal(mCurParsingPtr, "<=") ) {
 
 		ret = Token(mCurParsingPtr, 2, mCurParsingLOC, Token::kBinaryOp);
 		mCurParsingPtr += 2;
@@ -266,7 +267,9 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 			 _isFirstN_Equal(mCurParsingPtr, "/") ||
 			 _isFirstN_Equal(mCurParsingPtr, "|") ||
 			 _isFirstN_Equal(mCurParsingPtr, "&") ||
-			 _isFirstN_Equal(mCurParsingPtr, "=") ) {
+			 _isFirstN_Equal(mCurParsingPtr, "=") ||
+			 _isFirstN_Equal(mCurParsingPtr, ">") ||
+			 _isFirstN_Equal(mCurParsingPtr, "<") ) {
 
 		ret = Token(mCurParsingPtr, 1, mCurParsingLOC, Token::kBinaryOp);
 		++mCurParsingPtr;
@@ -1603,8 +1606,38 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 	}
 
 	bool isArithmetric = (mOperator == "+" || mOperator == "-" || mOperator == "*" || mOperator == "/");
+	bool isCompareOp = (mOperator == "==" || mOperator == ">=" || mOperator == ">" || mOperator == "<=" || mOperator == "<");
 	bool isLogicOp = (mOperator == "||" || mOperator == "&&");
 	bool isBitwizeOp = (mOperator == "|" || mOperator == "&");
+
+	if (isCompareOp) {
+
+		if (mOperator == "==") {
+			if (leftType.type != rightType.type || leftType.type == VarType::kStructure || rightType.type == VarType::kStructure) {
+				errMsg = "\"==\" operator cannot be performed with structures or two different built-in types.";
+				return false;
+			}
+		}
+		else {
+			// "greater than" or "less than" operators can only be performed on numerical scalar values
+			if (leftType.type == VarType::kBoolean || rightType.type == VarType::kBoolean) {
+				errMsg = mOperator;
+				errMsg += " operator cannot be performed with boolean values.";
+				return false;
+			}
+
+			if (TypeElementCnt(leftType.type) > 1 || TypeElementCnt(rightType.type) > 1) {
+				errMsg = mOperator;
+				errMsg += " operator can only be performed on scalar values.";
+				return false;
+			}
+		}
+
+		outType.pStructDef = NULL;
+		outType.type = VarType::kBoolean;
+		mCachedTypeInfo = outType;
+		return true;
+	}
 
 	if (isArithmetric || isBitwizeOp || mOperator == "=") {
 
@@ -1641,7 +1674,6 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 
 		outType.pStructDef = NULL;
 		outType.type = leftType.type;
-		mCachedTypeInfo = outType;
 		mCachedTypeInfo = outType;
 		return true;
 	}

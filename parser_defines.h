@@ -9,6 +9,7 @@ namespace SC {
 	typedef float Float;
 #endif
 	typedef int Int;
+	typedef int Boolean;
 	
 	enum VarType {
 		kFloat,
