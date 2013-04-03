@@ -125,17 +125,20 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRe
                  mpCurFunction->getEntryBlock().begin());
 	llvm::Value* ret = pRefPtr;
 	if (!pRefPtr) {
-		llvm::Value* arraySize = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pVarDef->GetArrayCnt(), true));
 
 		if (pVarDef->GetVarType() == VarType::kStructure) {
 			llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());	
-			if (llvmType)
-				ret = TmpB.CreateAlloca(llvmType, arraySize, name.c_str());
+			if (llvmType) {
+				llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
+				ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+			}
 		}
 		else {
 			llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
-			if (llvmType)
-				ret = TmpB.CreateAlloca(llvmType, arraySize, name.c_str());
+			if (llvmType) {
+				llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
+				ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+			}
 		}
 
 	}

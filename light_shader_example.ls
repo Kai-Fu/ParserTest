@@ -72,10 +72,10 @@ struct ArrayCntr {
 
 float HandleArray(ArrayCntr& ref)
 {
-	/*float3 my_array[13];
+	float3 my_array[13];
 
 	my_array[2] = float3(2,3,4);
-	my_array[2].z = 1;*/
+	my_array[2].z = 1;
 
 	ref.my_array[7] = 0.123;
 	return 123.6;

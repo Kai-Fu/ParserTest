@@ -76,6 +76,7 @@ int main(int argc, char* argv[])
 		ret = HandleVector(vData);*/
 
 		struct ArrayCntr {
+			float abc;
 			float my_array[13];
 		};
 		ArrayCntr array_ref;
