@@ -80,8 +80,8 @@ int main(int argc, char* argv[])
 			float my_array[13];
 		};
 		ArrayCntr array_ref;
-		float (*HandleArray)(ArrayCntr* ref) = (float (*)(ArrayCntr* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleArray");
-		ret = HandleArray(&array_ref);
+		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleArray");
+		HandleArray(&array_ref);
 	}
 	
 

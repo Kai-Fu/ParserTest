@@ -199,7 +199,7 @@ llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context) const
 		return CG_Context::sBuilder.CreateRet(retVal);
 	}
 	else
-		return NULL;
+		return CG_Context::sBuilder.CreateRetVoid();
 }
 
 void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
