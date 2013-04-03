@@ -9,6 +9,7 @@ struct TestStruct1
 {
 	float a;
 	int cond;
+	int ib[2];
 	float b;
 };
 

@@ -316,10 +316,11 @@ llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr,
 			return sBuilder.CreateICmpSLE(pL, R_Value);
 		else if (opStr == "==") 
 			return sBuilder.CreateICmpEQ(pL, R_Value);
-		else if (opStr == "||") 
+		else if (opStr == "||" || opStr == "|") 
 			return sBuilder.CreateOr(pL, R_Value); // boolean values are treated as i1 integer
-		else if (opStr == "&&") 
+		else if (opStr == "&&" || opStr == "&") 
 			return sBuilder.CreateAnd(pL, R_Value); // boolean values are treated as i1 integer
+
 	}
 	
 	return NULL;

@@ -12,6 +12,7 @@ struct TestStruct1
 	float a;
 	/* This is commnent  */
 	bool cond;
+	int2 ib;
 	float b;
 };
 
@@ -19,6 +20,7 @@ struct NestedStruct
 {
 	float a;
 	bool my_b;
+	
 	TestStruct1 s;
 };
 
@@ -28,6 +30,7 @@ float DistanceSqr(float a, float b)
 	varStruct.a = 3.0;
 	varStruct.my_b = true;
 	varStruct.s.b = 4.0;
+	
 	return a*a + b*b + varStruct.a * varStruct.s.b;
 }
 
@@ -47,6 +50,7 @@ float RetSimpleValue(TestStruct1& mod)
 	mod.b = 678.9;
 	mod.cond = (mod.a < mod.b && 123 > 123.8);
 	float var = 123.891f + 321.0f;
+	mod.ib = int2(123, 234) & int2(567, 876);
 	return var;
 }
 
