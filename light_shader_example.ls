@@ -70,7 +70,7 @@ struct ArrayCntr {
 	float my_array[13];
 };
 
-float HandleArray(ArrayCntr& ref)
+void HandleArray(ArrayCntr& ref)
 {
 	float3 my_array[13];
 
@@ -78,7 +78,7 @@ float HandleArray(ArrayCntr& ref)
 	my_array[2].z = 1;
 
 	ref.my_array[7] = 0.123;
-	return 123.6;
+	return;
 }
 
 /*

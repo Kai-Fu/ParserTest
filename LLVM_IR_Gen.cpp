@@ -193,9 +193,13 @@ llvm::Value* CodeDomain::GenerateCode(CG_Context* context) const
 
 llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context) const
 {
-	llvm::Value* retVal = mpRetValue->GenerateCode(context);
-	assert(retVal);
-	return CG_Context::sBuilder.CreateRet(retVal);
+	if (mpRetValue) {
+		llvm::Value* retVal = mpRetValue->GenerateCode(context);
+		assert(retVal);
+		return CG_Context::sBuilder.CreateRet(retVal);
+	}
+	else
+		return NULL;
 }
 
 void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const

@@ -32,6 +32,7 @@ void Initialize_AST_Gen()
 	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 4, true);
 
 	s_BuiltInTypes["bool"] = TypeDesc(kBoolean, 4, true);
+	s_BuiltInTypes["void"] = TypeDesc(kVoid, 0, true);
 
 	s_KeyWords["struct"] = kStructDef;
 	s_KeyWords["if"] = kIf;
@@ -733,7 +734,7 @@ bool CompilingContext::IsVarDefinePartten(bool allowInit)
 	Token t0 = PeekNextToken(0);
 	Token t1 = PeekNextToken(1);
 
-	if (!t0.IsValid() || !t1.IsValid())
+	if (!t0.IsValid() || !t1.IsValid() || t0.IsEqual("void"))
 		return false;
 
 	if (t0.GetType() != Token::kIdentifier || IsKeyWord(t0))
@@ -971,8 +972,13 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 			if (!PeekNextToken(0).IsEqual(";")) {
 				pValue = ParseComplexExpression(curDomain, ";");
 				if (!pValue) return false;
-				GetNextToken(); // Eat the ";"
 			}
+			if (!PeekNextToken(0).IsEqual(";")) {
+				AddErrorMessage(PeekNextToken(0), "Unexpected token.");
+				return false;
+			}
+			GetNextToken(); // Eat the ";"
+
 			pNewExp = new Exp_FuncRet(pFuncDecl, pValue);
 			funcRetTypeInfo.type = pFuncDecl->GetReturnType(funcRetTypeInfo.pStructDef);
 		}
@@ -1000,7 +1006,8 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 			if (funcRetTypeInfo.type != VarType::kInvalid) {
 				bool FtoI = false;
 
-				if (!funcRetTypeInfo.IsTypeCompatible(typeInfo, FtoI)) {
+				if (!funcRetTypeInfo.IsTypeCompatible(typeInfo, FtoI) && 
+					!(funcRetTypeInfo.type == VarType::kVoid && typeInfo.type == VarType::kVoid)) {
 					AddErrorMessage(firstT, "Invalid return type for this function.");
 					delete pNewExp;
 					return false;
@@ -2042,8 +2049,10 @@ bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 		TypeInfo funcRetInfo;
 		funcRetInfo.type = mpFuncDecl->GetReturnType(funcRetInfo.pStructDef);
 		bool FtoI = false;
-		if (!funcRetInfo.IsTypeCompatible(outType, FtoI))
+		if (!funcRetInfo.IsTypeCompatible(outType, FtoI)) {
+			errMsg = "Invalid return expression.";
 			return false;
+		}
 		if (FtoI)
 			warnMsg.push_back("Implicit float to int conversion.");
 
