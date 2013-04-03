@@ -190,7 +190,7 @@ bool RootDomain::JIT_Compile()
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
-			llvm::verifyFunction(*funcValue);
+			llvm::verifyFunction(*funcValue, llvm::PrintMessageAction);
 
 			void *funcPtr = CG_Context::TheExecutionEngine->getPointerToFunction(funcValue);
 			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcPtr;
