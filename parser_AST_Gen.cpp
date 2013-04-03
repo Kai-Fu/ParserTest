@@ -113,6 +113,11 @@ Token::Type Token::GetType() const
 	return mType;
 }
 
+int Token::GetLOC() const
+{
+	return mLOC;
+}
+
 bool Token::IsValid() const
 {
 	return (mpData != NULL);
@@ -633,7 +638,7 @@ const std::string& Exp_StructDef::GetStructureName() const
 	return mStructName;
 }
 
-VarType Exp_StructDef::GetElementType(int idx, const Exp_StructDef* &outStructDef) const
+VarType Exp_StructDef::GetElementType(int idx, const Exp_StructDef* &outStructDef, int& arraySize) const
 {
 	std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(idx);
 	if (it == mIdx2ValueDefs.end())
@@ -641,6 +646,7 @@ VarType Exp_StructDef::GetElementType(int idx, const Exp_StructDef* &outStructDe
 	else {
 		VarType ret = it->second->GetVarType();
 		outStructDef = it->second->GetStructDef();
+		arraySize = it->second->GetArrayCnt();
 		return ret;
 	}
 }
@@ -657,6 +663,20 @@ int Exp_StructDef::GetElementIdxByName(const std::string& name) const
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
 {
 	mErrorMessages.push_back(std::pair<Token, std::string>(token, str));
+}
+
+bool CompilingContext::HasErrorMessage() const
+{
+	return !mErrorMessages.empty();
+}
+
+void CompilingContext::PrintErrorMessage() const
+{
+	std::list<std::pair<Token, std::string> >::const_iterator it = mErrorMessages.begin();
+	while (it != mErrorMessages.end()) {
+		printf("line(%d): %s\n", it->first.GetLOC(), it->second.c_str());
+		++it;
+	}
 }
 
 void CompilingContext::AddWarningMessage(const Token& token, const std::string& str)
@@ -772,6 +792,26 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 			return false;
 		}
 
+		// Test if the coming token is "[", which indicates this variable is an array type.
+		//
+		int arrayCnt = 0;
+		if (context.PeekNextToken(0).IsEqual("[")) {
+			context.GetNextToken(); // Eat the "["
+			Exp_ValueEval* pOrgValue = context.ParseComplexExpression(curDomain, "]");
+			Exp_Constant* arrayCntExp = dynamic_cast<Exp_Constant*>(pOrgValue);
+
+			if (!arrayCntExp || arrayCntExp->IsFloat()) {
+				if (pOrgValue) delete pOrgValue;
+				context.AddErrorMessage(curT, "Array size must be constant integer.");
+				return false;
+			}
+			
+			arrayCnt = (int)arrayCntExp->GetValue();
+			delete pOrgValue;
+			context.GetNextToken(); // Eat the "]"
+
+		}
+
 		// Test if the coming token is "=", which indicates the variable initialization.
 		//
 		Exp_ValueEval* pInitValue = NULL;
@@ -810,6 +850,8 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 		}
 
 		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitValue);
+		ret->mArrayCnt = arrayCnt;
+
 		if (varType == VarType::kStructure)
 			ret->SetStructDef(pStructDef);
 
@@ -866,9 +908,20 @@ void CompilingContext::PopStatusCode()
 	mStatusCode.pop_back();
 }
 
+Exp_ValueEval::TypeInfo::TypeInfo()
+{
+	type = VarType::kInvalid;
+	pStructDef = 0;
+	arraySize = 0;
+	assignable = false;
+}
+
 bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI)
 {
 	FtoI = false;
+	if (from.arraySize > 0 || arraySize > 0)
+		return false;  // Array types cannot be involved in any arithmatic except for indexer.
+
 	if (type == VarType::kStructure)
 		return pStructDef == from.pStructDef;
 	else
@@ -908,7 +961,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	else if (GetStatusCode() & kAllowValueExp) {
 
 		Exp_ValueEval* pNewExp = NULL;
-		Exp_ValueEval::TypeInfo funcRetTypeInfo = {VarType::kInvalid, NULL};
+		Exp_ValueEval::TypeInfo funcRetTypeInfo;
 		if (PeekNextToken(0).IsEqual("return")) {
 			GetNextToken(); // Eat the "return"
 
@@ -1145,6 +1198,7 @@ Exp_VarDef::Exp_VarDef(VarType type, const Token& var, Exp_ValueEval* pInitValue
 	mVarType = type;
 	mpStructDef = NULL;
 	mVarName = var;
+	mArrayCnt = 0;
 	mpInitValue = pInitValue;
 }
 
@@ -1177,6 +1231,11 @@ VarType Exp_VarDef::GetVarType() const
 const Exp_StructDef* Exp_VarDef::GetStructDef() const
 {
 	return mpStructDef;
+}
+
+int Exp_VarDef::GetArrayCnt() const
+{
+	return mArrayCnt;
 }
 
 RootDomain::RootDomain() :
@@ -1339,16 +1398,28 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 	}
 	// This is not the end of simple expression, I need to check for the next token to see if it has swizzle or structure member access.
 	// e.g. myVar.xyz, myVar.myVar
-	while (PeekNextToken(0).IsEqual(".")) {
+	while (PeekNextToken(0).IsEqual(".") || PeekNextToken(0).IsEqual("[")) {
 		// Need to deal with dot operator
-		GetNextToken();  // Eat the "."
-		curT = GetNextToken();
-		if (curT.GetType() != Token::kIdentifier) {
-			AddErrorMessage(curT, "Unexpected token, identifier is expected.");
-			return NULL;
+		curT = GetNextToken();  // Eat the "." or "["
+		if (curT.IsEqual(".")) {
+			curT = GetNextToken();
+			if (curT.GetType() != Token::kIdentifier) {
+				AddErrorMessage(curT, "Unexpected token, identifier is expected.");
+				return NULL;
+			}
+			result.reset(new Exp_DotOp(curT.ToStdString(), result.release()));
+		}
+		else {
+			Exp_ValueEval* idx = ParseComplexExpression(curDomain, "]");
+			if (idx == NULL) {
+				AddErrorMessage(curT, "Invalid indexing expression.");
+				return NULL;
+			}
+			GetNextToken(); // Eat the ending "]"
+			result.reset(new Exp_Indexer(result.release(), idx));
 		}
 
-		result.reset(new Exp_DotOp(curT.ToStdString(), result.release()));
+		
 	}
 
 	return result.release();
@@ -1436,10 +1507,17 @@ double Exp_Constant::GetValue() const
 	return mValue;
 }
 
+bool Exp_Constant::IsFloat() const
+{
+	return mIsFromFloat;
+}
+
 bool Exp_Constant::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
 	outType.type = mIsFromFloat ? VarType::kFloat : VarType::kInt;
 	outType.pStructDef = NULL;
+	outType.arraySize = 0;
+	outType.assignable = false;
 	mCachedTypeInfo = outType;
 	return true;
 }
@@ -1459,6 +1537,8 @@ bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 {
 	outType.type = mpDef->GetVarType();
 	outType.pStructDef = mpDef->GetStructDef();
+	outType.arraySize = mpDef->GetArrayCnt();
+	outType.assignable = true;
 	mCachedTypeInfo = outType;
 	return true;
 }
@@ -1539,6 +1619,8 @@ bool Exp_BuiltInInitializer::CheckSemantic(TypeInfo& outType, std::string& errMs
 	}
 	outType.type = mType;
 	outType.pStructDef = NULL;
+	outType.arraySize = 0;
+	outType.assignable = false;
 	mCachedTypeInfo = outType;
 	return true;
 }
@@ -1560,6 +1642,12 @@ bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 	// Currently only "!" and "-" are supported unary operator
 	if (!mpExpr->CheckSemantic(outType, errMsg, warnMsg))
 		return false;
+
+	if (outType.arraySize > 0) {
+		errMsg = "Array type can only be used with indexer.";
+		return false;
+	}
+
 	if (mOpType == "!" && outType.type != VarType::kBoolean) {
 		errMsg = "\"!\" must be followed with boolean expression.";
 		return false;
@@ -1579,6 +1667,10 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 	TypeInfo leftType, rightType;
 	if (!mpLeftExp->CheckSemantic(leftType, errMsg, warnMsg) || !mpRightExp->CheckSemantic(rightType, errMsg, warnMsg))
 		return false;
+	if (leftType.arraySize > 0 || rightType.arraySize) {
+		errMsg = "Array type can only be used with indexer.";
+		return false;
+	}
 
 	if (leftType.type == VarType::kStructure || rightType.type == VarType::kStructure) {
 		// Only "=" operator can accept structure as the arguments
@@ -1635,6 +1727,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 
 		outType.pStructDef = NULL;
 		outType.type = VarType::kBoolean;
+		outType.arraySize = 0;
+		outType.assignable = false;
 		mCachedTypeInfo = outType;
 		return true;
 	}
@@ -1674,6 +1768,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 
 		outType.pStructDef = NULL;
 		outType.type = leftType.type;
+		outType.arraySize = 0;
+		outType.assignable = false;
 		mCachedTypeInfo = outType;
 		return true;
 	}
@@ -1686,6 +1782,8 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		else {
 			outType.type = VarType::kBoolean;
 			outType.pStructDef = NULL;
+			outType.arraySize = 0;
+			outType.assignable = false;
 			mCachedTypeInfo = outType;
 			return true;
 		}
@@ -1720,6 +1818,8 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 				outType.pStructDef = pDef->GetStructDef();
 			else
 				outType.pStructDef = NULL;
+			outType.arraySize = pDef->GetArrayCnt();
+			outType.assignable = parentType.assignable;
 		}
 		else {
 			errMsg = "Invalid structure member name.";
@@ -1745,7 +1845,8 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 
 		outType.type = MakeType(IsIntegerType(parentType.type), elemCnt);
 		outType.pStructDef = NULL;
-
+		outType.arraySize = 0;
+		outType.assignable = (parentType.assignable && elemCnt == 1) ? true : false;
 	}
 	mCachedTypeInfo = outType;
 	return true;
@@ -1753,31 +1854,8 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 
 bool Exp_DotOp::IsAssignable() const
 {
-	Exp_VariableRef* pVarDef = dynamic_cast<Exp_VariableRef*>(mpExp);
-	if (pVarDef) {
-		if (pVarDef->GetStructDef() != NULL) {
-			// The structure member access should already checked in previous calll to CheckSemantic()
-			return true; 
-		}
-		else {
-			int swizzleIdx[4];
-			int elemCnt = ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
-			if (elemCnt == 1) {
-				// The validity of the swizzling is already checked in CheckSemantic(), so here if the swizzling is for one element,
-				// then it should be asssume as assignable.
-				return true;
-			}
-			else
-				return false;
-		}
-	}
-	else {
-		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
-		if (pDotOp && pDotOp->IsAssignable())
-			return true;
-		else
-			return false;
-	}
+	// assume the CheckSemantic() is already called before invoking this function.
+	return GetCachedTypeInfo().assignable;
 }
 
 Exp_FunctionDecl::Exp_FunctionDecl(CodeDomain* parent) :
@@ -1956,6 +2034,10 @@ bool Exp_FuncRet::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 	if (mpRetValue) {
 		if (!mpRetValue->CheckSemantic(outType, errMsg, warnMsg))
 			return false;
+		if (outType.arraySize > 0) {
+			errMsg = "Function cannot return array type.";
+			return false;
+		}
 		assert(mpFuncDecl);
 		TypeInfo funcRetInfo;
 		funcRetInfo.type = mpFuncDecl->GetReturnType(funcRetInfo.pStructDef);
@@ -1994,6 +2076,8 @@ bool Exp_TrueOrFalse::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 {
 	outType.type = VarType::kBoolean;
 	outType.pStructDef = NULL;
+	outType.arraySize = 0;
+	outType.assignable = false;
 	mCachedTypeInfo = outType;
 	return true;
 }
@@ -2016,6 +2100,13 @@ bool Exp_ValueEval::IsAssignable() const
 
 void Exp_ValueEval::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
+	assert(0);
+}
+
+llvm::Value* Exp_ValueEval::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+{
+	vecElemIdx = -1;
+	return NULL;
 }
 
 Exp_FunctionCall::Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt)
@@ -2055,6 +2146,7 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 			warnMsg.push_back("Implicit float to int conversion.");
 	}
 	outType.type = mpFuncDef->GetReturnType(outType.pStructDef);
+	// TODO: handle array types?
 	mCachedTypeInfo = outType;
 	return true;
 }
@@ -2067,6 +2159,50 @@ bool CompilingContext::JIT_Compile()
 void* CompilingContext::GetJITedFuncPtr(const std::string& funcName)
 {
 	return mRootCodeDomain->GetFuncPtrByName(funcName);
+}
+
+Exp_Indexer::Exp_Indexer(Exp_ValueEval* pExp, Exp_ValueEval* pIndex)
+{
+	mpExp = pExp;
+	mpIndex = pIndex;
+}
+
+Exp_Indexer::~Exp_Indexer()
+{
+	delete mpExp;
+	delete mpIndex;
+}
+
+bool Exp_Indexer::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	TypeInfo idxType;
+	if (!mpIndex->CheckSemantic(idxType, errMsg, warnMsg))
+		return false;
+
+	if (idxType.type != VarType::kInt) {
+		errMsg = "Indexer must be integer type.";
+		return false;
+	}
+
+	TypeInfo expType;
+	if (!mpExp->CheckSemantic(expType, errMsg, warnMsg))
+		return false;
+	if (expType.arraySize == 0) {
+		errMsg = "Indexer must be applied to variable of array type.";
+		return false;
+	}
+		
+	outType.type = expType.type;
+	outType.pStructDef = expType.pStructDef;
+	outType.arraySize = 0;
+	outType.assignable = expType.assignable;
+	mCachedTypeInfo = outType;
+	return true;
+}
+
+bool Exp_Indexer::IsAssignable() const
+{
+	return GetCachedTypeInfo().assignable;
 }
 
 #ifdef WANT_MEM_LEAK_CHECK

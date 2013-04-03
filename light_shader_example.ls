@@ -14,13 +14,14 @@ struct TestStruct1
 	bool cond;
 	int2 ib;
 	float b;
+	
 };
-
+/*
 struct NestedStruct
 {
 	float a;
 	bool my_b;
-	
+	float3 my_array[7];
 	TestStruct1 s;
 };
 
@@ -30,7 +31,6 @@ float DistanceSqr(float a, float b)
 	varStruct.a = 3.0;
 	varStruct.my_b = true;
 	varStruct.s.b = 4.0;
-	
 	return a*a + b*b + varStruct.a * varStruct.s.b;
 }
 
@@ -63,8 +63,23 @@ float HandleVector(float3& ref)
 	ref.y = 145.6;
 	ref.z = b.w;
 	return 3.14f;
-}
+}*/
 
+struct ArrayCntr {
+	float abc;
+	float my_array[13];
+};
+
+float HandleArray(ArrayCntr& ref)
+{
+	/*float3 my_array[13];
+
+	my_array[2] = float3(2,3,4);
+	my_array[2].z = 1;*/
+
+	ref.my_array[7] = 0.123;
+	return 123.6;
+}
 
 /*
 float3 simpleFunc(float2& a, float b)

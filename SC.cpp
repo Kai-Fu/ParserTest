@@ -51,10 +51,16 @@ int main(int argc, char* argv[])
 				break;
 
 		}*/
+		if (ctx.HasErrorMessage()) {
+			ctx.PrintErrorMessage();
+			return -1;
+		}
+
 		ctx.JIT_Compile();
-		TestStruct1 mod = {0.0f, 1234, 0.0f};
+		float ret;
+		/*TestStruct1 mod = {0.0f, 1234, 0.0f};
 		float (*FP)(TestStruct1* a) = (float (*)(TestStruct1* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
-		float ret = FP(&mod);
+		ret = FP(&mod);
 
 		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
 		ret = FP_Dis(1.5f, 6.3f);
@@ -67,7 +73,14 @@ int main(int argc, char* argv[])
 
 		float vData[3];
 		float (*HandleVector)(float* ref) = (float (*)(float* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleVector");
-		ret = HandleVector(vData);
+		ret = HandleVector(vData);*/
+
+		struct ArrayCntr {
+			float my_array[13];
+		};
+		ArrayCntr array_ref;
+		float (*HandleArray)(ArrayCntr* ref) = (float (*)(ArrayCntr* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleArray");
+		ret = HandleArray(&array_ref);
 	}
 	
 

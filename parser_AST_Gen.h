@@ -72,6 +72,7 @@ namespace SC {
 		double GetConstValue() const;
 		int GetBinaryOpLevel() const;
 		Type GetType() const;
+		int GetLOC() const;
 
 		bool IsValid() const;
 		bool IsEOF() const;
@@ -170,6 +171,7 @@ namespace SC {
 		Token mVarName;
 		Exp_ValueEval* mpInitValue;
 		VarType mVarType;
+		int mArrayCnt;  // zero means this variable is not an array
 		const Exp_StructDef* mpStructDef;
 
 	public:
@@ -183,6 +185,7 @@ namespace SC {
 		Token GetVarName() const;
 		VarType GetVarType() const;
 		const Exp_StructDef* GetStructDef() const;
+		int GetArrayCnt() const;
 	};
 
 	class Exp_StructDef : public CodeDomain
@@ -200,7 +203,7 @@ namespace SC {
 		int GetStructSize() const;
 		int GetElementCount() const;
 		const std::string& GetStructureName() const;
-		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef) const;
+		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef, int& arraySize) const;
 		int GetElementIdxByName(const std::string& name) const;
 
 		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
@@ -212,6 +215,10 @@ namespace SC {
 		struct TypeInfo {
 			VarType type;
 			const Exp_StructDef* pStructDef;
+			int arraySize;
+			bool assignable;
+
+			TypeInfo();
 			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI);
 		};
 		Exp_ValueEval();
@@ -219,6 +226,7 @@ namespace SC {
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg = std::string(), std::vector<std::string>& warnMsg = std::vector<std::string>()) = 0;
 		virtual bool IsAssignable() const;
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
+		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 
 	protected:
 		TypeInfo mCachedTypeInfo;
@@ -236,6 +244,7 @@ namespace SC {
 		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 
 		double GetValue() const;
+		bool IsFloat() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
@@ -264,6 +273,7 @@ namespace SC {
 		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 		const Exp_StructDef* GetStructDef();
 		const Exp_VarDef* GetVarDef() const;
+		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		virtual bool IsAssignable() const;
@@ -327,7 +337,27 @@ namespace SC {
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		virtual bool IsAssignable() const;
-		llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+
+		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+	};
+
+	class Exp_Indexer : public Exp_ValueEval
+	{
+	private:
+		Exp_ValueEval* mpExp;
+		Exp_ValueEval* mpIndex;
+
+	public:
+		Exp_Indexer(Exp_ValueEval* pExp, Exp_ValueEval* pIndex);
+		virtual ~Exp_Indexer();
+
+		virtual llvm::Value* GenerateCode(CG_Context* context) const;
+		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
+
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+		virtual bool IsAssignable() const;
+
+		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 	};
 
 	class Exp_FunctionDecl : public CodeDomain
@@ -447,6 +477,9 @@ namespace SC {
 		~CompilingContext();
 
 		void AddErrorMessage(const Token& token, const std::string& str);
+		bool HasErrorMessage() const;
+		void PrintErrorMessage() const;
+
 		void AddWarningMessage(const Token& token, const std::string& str);
 		bool IsEOF() const;
 

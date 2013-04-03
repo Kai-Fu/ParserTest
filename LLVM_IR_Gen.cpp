@@ -99,7 +99,8 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context) const
 	if (!VR)
 		return NULL;
 	if (mOperator == "=") {
-		mpLeftExp->GenerateAssignCode(context, VR);
+		llvm::Value* castedValue = context->CastValueType(VR, mpRightExp->GetCachedTypeInfo().type, mpLeftExp->GetCachedTypeInfo().type);
+		mpLeftExp->GenerateAssignCode(context, castedValue);
 		llvm::Value* VL = mpLeftExp->GenerateCode(context);
 		return VL;
 	}
@@ -221,17 +222,29 @@ void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) con
 
 llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 {
-	Exp_VariableRef* pVarRef = dynamic_cast<Exp_VariableRef*>(mpExp);
+	int parentElemIdx = -1;
+	llvm::Value* parentPtr = mpExp->GetValuePtr(context, parentElemIdx);
+	
 	Exp_ValueEval::TypeInfo parentTypeInfo;
 	parentTypeInfo = mpExp->GetCachedTypeInfo();
-	const Exp_StructDef* pStructDef = parentTypeInfo.pStructDef;
-	llvm::Value* dataPtr = NULL;
+	const Exp_StructDef* pParentStructDef = parentTypeInfo.pStructDef;
 	vecElemIdx = -1;
-	if (pVarRef) {
+	if (parentPtr && parentElemIdx == -1) {
 		
-		std::string& refName = pVarRef->GetVarDef()->GetVarName().ToStdString();
-		dataPtr = context->GetVariablePtr(refName, true);
-		if (!pVarRef->GetStructDef()) {
+		int elemIdx = -1;
+		if (pParentStructDef)
+			elemIdx = pParentStructDef->GetElementIdxByName(mOpStr);
+
+		if (elemIdx != -1) {
+			// It's accessing structure member
+			std::vector<llvm::Value*> indices(2);
+			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)elemIdx));
+			llvm::Value* structElemPtr = CG_Context::sBuilder.CreateGEP(parentPtr, indices);
+			return structElemPtr;//CG_Context::sBuilder.CreateGEP(structElemPtr, indices[0]);
+		}
+		else {
+			// it should access ONE specific element with swizzling operator
 			int elemCnt = TypeElementCnt(GetCachedTypeInfo().type);
 			if (elemCnt != 1)
 				return NULL;
@@ -239,28 +252,13 @@ llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 				int swizzleIdx[4];
 				ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
 				vecElemIdx = swizzleIdx[0];
+				return parentPtr;
 			}
 		}
-
 	}
-	else {
-		Exp_DotOp* pDotOp = dynamic_cast<Exp_DotOp*>(mpExp);
-		if (pDotOp) {
-			dataPtr = pDotOp->GetValuePtr(context, vecElemIdx);
-		}
-		else
-			return NULL;
-	}
-
-	if (vecElemIdx == -1) {
-		std::vector<llvm::Value*> indices(2);
-		indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
-		indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pStructDef->GetElementIdxByName(mOpStr)));
-		return CG_Context::sBuilder.CreateGEP(dataPtr, indices);
-	}
-	else {
-		return dataPtr;
-	}
+	else 
+		return NULL;
+	
 }
 
 llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
@@ -330,6 +328,41 @@ llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context) const
 		
 		return outVar;
 	}
+}
+
+llvm::Value* Exp_VariableRef::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+{
+	vecElemIdx = -1;
+	llvm::Value* varPtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
+	return varPtr;
+}
+
+llvm::Value* Exp_Indexer::GenerateCode(CG_Context* context) const
+{
+	int elemIdx = -1;
+	llvm::Value* ptr = GetValuePtr(context, elemIdx);
+	return CG_Context::sBuilder.CreateLoad(ptr);
+}
+
+llvm::Value* Exp_Indexer::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+{
+	vecElemIdx = -1;
+	llvm::Value* idx = mpIndex->GenerateCode(context);
+	int elemIdx = -1;
+	llvm::Value* parentPtr = mpExp->GetValuePtr(context, elemIdx);
+	assert(elemIdx = -1);
+
+	std::vector<llvm::Value*> indices(2);
+	indices[1] = idx;
+	indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+	return CG_Context::sBuilder.CreateGEP(parentPtr, indices);
+}
+
+void Exp_Indexer::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
+{
+	int elemIdx = -1;
+	llvm::Value* ptr = GetValuePtr(context, elemIdx);
+	CG_Context::sBuilder.CreateStore(pValue, ptr);
 }
 
 } // namespace SC

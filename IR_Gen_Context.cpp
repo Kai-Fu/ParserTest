@@ -125,16 +125,19 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRe
                  mpCurFunction->getEntryBlock().begin());
 	llvm::Value* ret = pRefPtr;
 	if (!pRefPtr) {
+		llvm::Value* arraySize = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)pVarDef->GetArrayCnt(), true));
+
 		if (pVarDef->GetVarType() == VarType::kStructure) {
-			llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());
+			llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());	
 			if (llvmType)
-				ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+				ret = TmpB.CreateAlloca(llvmType, arraySize, name.c_str());
 		}
 		else {
 			llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
 			if (llvmType)
-				ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
+				ret = TmpB.CreateAlloca(llvmType, arraySize, name.c_str());
 		}
+
 	}
 	
 	if (ret) mVariables[name] = ret;
@@ -156,12 +159,16 @@ llvm::Type* CG_Context::NewStructType(const Exp_StructDef* pStructDef)
 	std::vector<llvm::Type*> elemTypes(elemCnt);
 	for (int i = 0; i < elemCnt; ++i) {
 		const Exp_StructDef* elemStructDef = NULL;
-		VarType elemSC_Type = pStructDef->GetElementType(i, elemStructDef);
+		int arraySize = 0;
+		VarType elemSC_Type = pStructDef->GetElementType(i, elemStructDef, arraySize);
 		if (elemSC_Type == VarType::kStructure) {
 			elemTypes[i] = GetStructType(elemStructDef);
 		}
 		else
 			elemTypes[i] = ConvertToLLVMType(elemSC_Type);
+
+		if (arraySize > 0)
+			elemTypes[i] = ArrayType::get(elemTypes[i], arraySize);
 		assert(elemTypes[i]);
 	}
 	ArrayRef<Type*> typeArray(&elemTypes[0], elemCnt);
@@ -266,8 +273,10 @@ llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, VarType srcType, V
 		else
 			return truncatedValue;
 	}
-	else
+	if (srcElemCnt < destElemCnt) 
 		return NULL;
+	else
+		return srcValue;
 }
 
 llvm::Value* CG_Context::CreateBinaryExpression(const std::string& opStr, 
