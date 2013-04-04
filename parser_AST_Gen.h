@@ -224,7 +224,7 @@ namespace SC {
 		Exp_ValueEval();
 		TypeInfo GetCachedTypeInfo() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg = std::string(), std::vector<std::string>& warnMsg = std::vector<std::string>()) = 0;
-		virtual bool IsAssignable() const;
+		virtual bool IsAssignable(bool allowSwizzle) const;
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
 		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 
@@ -276,7 +276,7 @@ namespace SC {
 		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
-		virtual bool IsAssignable() const;
+		virtual bool IsAssignable(bool allowSwizzle) const;
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
 	};
 
@@ -336,7 +336,7 @@ namespace SC {
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
-		virtual bool IsAssignable() const;
+		virtual bool IsAssignable(bool allowSwizzle) const;
 
 		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 	};
@@ -355,7 +355,7 @@ namespace SC {
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
-		virtual bool IsAssignable() const;
+		virtual bool IsAssignable(bool allowSwizzle) const;
 
 		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
 	};
@@ -410,6 +410,7 @@ namespace SC {
 	public:
 		Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt);
 		virtual ~Exp_FunctionCall();
+		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};

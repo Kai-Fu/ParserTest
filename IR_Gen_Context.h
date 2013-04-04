@@ -36,6 +36,7 @@ private:
 	CG_Context* mpParent;
 	Function* mpCurFunction;
 	std::hash_map<std::string, llvm::Value*> mVariables;
+	std::hash_map<std::string, llvm::Function*> mFuncDecls;
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
 public:
 	static llvm::Module *TheModule;
@@ -54,6 +55,8 @@ public:
 	llvm::Value* NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRefPtr);
 	llvm::Type* GetStructType(const Exp_StructDef* pStructDef);
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
+	void AddFunctionDecl(const std::string& funcName, llvm::Function* pF);
+	llvm::Function* GetFuncDeclByName(const std::string& funcName);
 	CG_Context* CreateChildContext(Function* pCurFunc);
 
 	llvm::Value* CastValueType(llvm::Value* srcValue, VarType srcType, VarType destType);

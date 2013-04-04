@@ -146,6 +146,9 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 
 	FunctionType *FT = FunctionType::get(retType, funcArgTypes, false);
 	Function *F = Function::Create(FT, Function::ExternalLinkage, mFuncName, CG_Context::TheModule);
+	if (F) {
+		context->AddFunctionDecl(mFuncName, F);
+	}
 
 	// set names for all arguments
 	{
@@ -367,6 +370,26 @@ void Exp_Indexer::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) c
 	int elemIdx = -1;
 	llvm::Value* ptr = GetValuePtr(context, elemIdx);
 	CG_Context::sBuilder.CreateStore(pValue, ptr);
+}
+
+llvm::Value* Exp_FunctionCall::GenerateCode(CG_Context* context) const
+{
+	llvm::Function* pF = context->GetFuncDeclByName(mpFuncDef->GetFunctionName());
+	assert(pF);
+	std::vector<llvm::Value*> args;
+	for (int i = 0; i < (int)mInputArgs.size(); ++i) {
+		if (mpFuncDef->GetArgumentDesc(i)->isByRef) {
+			int dummyIdx = -1;
+			llvm::Value* argPtr = mInputArgs[i]->GetValuePtr(context, dummyIdx);
+			assert(dummyIdx == -1);
+			args.push_back(argPtr);
+		}
+		else {
+			llvm::Value* argValue = mInputArgs[i]->GenerateCode(context);
+			args.push_back(argValue);
+		}
+	}
+	return CG_Context::sBuilder.CreateCall(pF, args);
 }
 
 } // namespace SC

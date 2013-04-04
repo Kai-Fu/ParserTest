@@ -1359,8 +1359,10 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 			std::vector<std::auto_ptr<Exp_ValueEval> > argExp(argCnt);
 			for (int i = 0; i < argCnt; ++i) {
 				argExp[i].reset(ParseComplexExpression(curDomain, (i == (argCnt-1)) ? ")" : ","));
-				if (!argExp[i].get())
+				if (!argExp[i].get()) {
+					AddErrorMessage(PeekNextToken(0), "Invalid function call.");
 					return NULL;
+				}
 				GetNextToken(); // Eat the ")" or ","
 			}
 			std::vector<Exp_ValueEval*> argExpArray(argCnt);
@@ -1550,13 +1552,14 @@ bool Exp_VariableRef::CheckSemantic(TypeInfo& outType, std::string& errMsg, std:
 	return true;
 }
 
-bool Exp_VariableRef::IsAssignable() const
+bool Exp_VariableRef::IsAssignable(bool allowSwizzle) const
 {
 	if (mpDef->GetVarType() == VarType::kInvalid ||
 		mpDef->GetVarType() == VarType::kVoid)
 		return false;
-	else
-		return true;
+	else {
+		return mpDef->GetArrayCnt() == 0;
+	}
 }
 
 const Exp_StructDef* Exp_VariableRef::GetStructDef()
@@ -1767,7 +1770,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		}
 
 		if (mOperator == "=") {
-			if (!mpLeftExp->IsAssignable()) {
+			if (!mpLeftExp->IsAssignable(true)) {
 				errMsg = "Cannot do assignment with left value.";
 				return false;
 			}
@@ -1816,6 +1819,11 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 	TypeInfo parentType;
 	if (!mpExp->CheckSemantic(parentType, errMsg, warnMsg))
 		return false;
+	if (mpExp->GetCachedTypeInfo().arraySize > 0) {
+		errMsg = "Must use indexer before swizzling or accessing its members.";
+		return false;
+	}
+
 	if (parentType.type == VarType::kStructure) {
 		if (parentType.pStructDef->IsVariableDefined(mOpStr, false)) {
 			Exp_VarDef* pDef = parentType.pStructDef->GetVarDefExpByName(mOpStr);
@@ -1859,9 +1867,13 @@ bool Exp_DotOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vecto
 	return true;
 }
 
-bool Exp_DotOp::IsAssignable() const
+bool Exp_DotOp::IsAssignable(bool allowSwizzle) const
 {
 	// assume the CheckSemantic() is already called before invoking this function.
+	//
+	if (!allowSwizzle && mpExp->GetCachedTypeInfo().type != VarType::kStructure)
+		return false; // reject the swizzling case
+	
 	return GetCachedTypeInfo().assignable;
 }
 
@@ -2102,7 +2114,7 @@ Exp_ValueEval::TypeInfo Exp_ValueEval::GetCachedTypeInfo() const
 	return mCachedTypeInfo;
 }
 
-bool Exp_ValueEval::IsAssignable() const
+bool Exp_ValueEval::IsAssignable(bool allowSwizzle) const
 {
 	return false;
 }
@@ -2148,6 +2160,10 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 		TypeInfo argTypeInfo;
 		if (!mInputArgs[i]->CheckSemantic(argTypeInfo, errMsg, warnMsg))
 			return false;
+		if (pArgDesc->isByRef && !mInputArgs[i]->IsAssignable(false)) {
+			errMsg = "Argument passed as reference is not assignable.";
+			return false;
+		}
 		bool FtoI = false;
 		if (!pArgDesc->typeInfo.IsTypeCompatible(argTypeInfo, FtoI))
 			return false;
@@ -2204,12 +2220,12 @@ bool Exp_Indexer::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 	outType.type = expType.type;
 	outType.pStructDef = expType.pStructDef;
 	outType.arraySize = 0;
-	outType.assignable = expType.assignable;
+	outType.assignable = true;
 	mCachedTypeInfo = outType;
 	return true;
 }
 
-bool Exp_Indexer::IsAssignable() const
+bool Exp_Indexer::IsAssignable(bool allowSwizzle) const
 {
 	return GetCachedTypeInfo().assignable;
 }

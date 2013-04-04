@@ -129,15 +129,23 @@ llvm::Value* CG_Context::NewVariable(const Exp_VarDef* pVarDef, llvm::Value* pRe
 		if (pVarDef->GetVarType() == VarType::kStructure) {
 			llvm::Type* llvmType = GetStructType(pVarDef->GetStructDef());	
 			if (llvmType) {
-				llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
-				ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+				if (pVarDef->GetArrayCnt() > 0) {
+					llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
+					ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+				}
+				else 
+					ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
 			}
 		}
 		else {
 			llvm::Type* llvmType = CG_Context::ConvertToLLVMType(pVarDef->GetVarType());
 			if (llvmType) {
-				llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
-				ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+				if (pVarDef->GetArrayCnt() > 0) {
+					llvm::Type* arrayType = llvm::ArrayType::get(llvmType, pVarDef->GetArrayCnt());
+					ret = TmpB.CreateAlloca(arrayType, 0, name.c_str());
+				}
+				else
+					ret = TmpB.CreateAlloca(llvmType, 0, name.c_str());
 			}
 		}
 
@@ -181,6 +189,19 @@ llvm::Type* CG_Context::NewStructType(const Exp_StructDef* pStructDef)
 	return ret;
 }
 
+void CG_Context::AddFunctionDecl(const std::string& funcName, llvm::Function* pF)
+{
+	assert(mFuncDecls.find(funcName) == mFuncDecls.end());
+	mFuncDecls[funcName] = pF;
+}
+
+llvm::Function* CG_Context::GetFuncDeclByName(const std::string& funcName)
+{
+	if (mFuncDecls.find(funcName) != mFuncDecls.end())
+		return mFuncDecls[funcName];
+	else
+		return mpParent ? mpParent->GetFuncDeclByName(funcName) : NULL;
+}
 
 bool RootDomain::JIT_Compile()
 {
