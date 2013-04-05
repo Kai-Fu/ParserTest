@@ -929,6 +929,16 @@ bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI)
 		return SC::IsTypeCompatible(type, from.type, FtoI);
 }
 
+bool Exp_ValueEval::TypeInfo::IsSameType(const TypeInfo& ref)
+{
+	if (type != ref.type ||
+		pStructDef != ref.pStructDef ||
+		arraySize != ref.arraySize)
+		return false;
+	else
+		return true;
+}
+
 bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* endT)
 {
 	if (PeekNextToken(0).IsEOF())
@@ -1677,7 +1687,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 	TypeInfo leftType, rightType;
 	if (!mpLeftExp->CheckSemantic(leftType, errMsg, warnMsg) || !mpRightExp->CheckSemantic(rightType, errMsg, warnMsg))
 		return false;
-	if (leftType.arraySize > 0 || rightType.arraySize) {
+	if (leftType.arraySize > 0 || rightType.arraySize > 0) {
 		errMsg = "Array type can only be used with indexer.";
 		return false;
 	}
@@ -2124,10 +2134,13 @@ void Exp_ValueEval::GenerateAssignCode(CG_Context* context, llvm::Value* pValue)
 	assert(0);
 }
 
-llvm::Value* Exp_ValueEval::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+Exp_ValueEval::ValuePtrInfo Exp_ValueEval::GetValuePtr(CG_Context* context) const
 {
-	vecElemIdx = -1;
-	return NULL;
+	ValuePtrInfo ptrInfo;
+	ptrInfo.belongToVector = false;
+	ptrInfo.valuePtr = NULL;
+	ptrInfo.vecElemIdx = -1;
+	return ptrInfo;
 }
 
 Exp_FunctionCall::Exp_FunctionCall(Exp_FunctionDecl* pFuncDef, Exp_ValueEval** ppArgs, int cnt)
@@ -2162,6 +2175,10 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 			return false;
 		if (pArgDesc->isByRef && !mInputArgs[i]->IsAssignable(false)) {
 			errMsg = "Argument passed as reference is not assignable.";
+			return false;
+		}
+		if (pArgDesc->isByRef && !pArgDesc->typeInfo.IsSameType(argTypeInfo)) {
+			errMsg = "Argument passed as reference should be of the same type(no implicit conversion).";
 			return false;
 		}
 		bool FtoI = false;

@@ -220,13 +220,21 @@ namespace SC {
 
 			TypeInfo();
 			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI);
+			bool IsSameType(const TypeInfo& ref);
 		};
+
+		struct ValuePtrInfo {
+			llvm::Value* valuePtr;
+			bool belongToVector;
+			int vecElemIdx;
+		};
+
 		Exp_ValueEval();
 		TypeInfo GetCachedTypeInfo() const;
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg = std::string(), std::vector<std::string>& warnMsg = std::vector<std::string>()) = 0;
 		virtual bool IsAssignable(bool allowSwizzle) const;
 		virtual void GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const;
-		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+		virtual ValuePtrInfo GetValuePtr(CG_Context* context) const;
 
 	protected:
 		TypeInfo mCachedTypeInfo;
@@ -273,7 +281,7 @@ namespace SC {
 		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 		const Exp_StructDef* GetStructDef();
 		const Exp_VarDef* GetVarDef() const;
-		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+		virtual ValuePtrInfo GetValuePtr(CG_Context* context) const;
 
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		virtual bool IsAssignable(bool allowSwizzle) const;
@@ -338,7 +346,7 @@ namespace SC {
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		virtual bool IsAssignable(bool allowSwizzle) const;
 
-		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+		virtual ValuePtrInfo GetValuePtr(CG_Context* context) const;
 	};
 
 	class Exp_Indexer : public Exp_ValueEval
@@ -357,7 +365,7 @@ namespace SC {
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		virtual bool IsAssignable(bool allowSwizzle) const;
 
-		virtual llvm::Value* GetValuePtr(CG_Context* context, int& vecElemIdx) const;
+		virtual ValuePtrInfo GetValuePtr(CG_Context* context) const;
 	};
 
 	class Exp_FunctionDecl : public CodeDomain

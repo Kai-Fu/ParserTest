@@ -207,36 +207,38 @@ llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context) const
 
 void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
-	int vecElemIdx = -1;
-	llvm::Value* pVarPtr = GetValuePtr(context, vecElemIdx);
-	assert(pVarPtr);
-	if (vecElemIdx == -1) {
+	Exp_ValueEval::ValuePtrInfo valuePtrInfo = GetValuePtr(context);
+	assert(valuePtrInfo.valuePtr);
+	if (!valuePtrInfo.belongToVector) {
 		if (GetCachedTypeInfo().type == VarType::kBoolean) {
 			llvm::Value* falseValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
 			llvm::Value* trueValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)1));
 			llvm::Value* intValue = CG_Context::sBuilder.CreateSelect(pValue, trueValue, falseValue);
-			CG_Context::sBuilder.CreateStore(intValue, pVarPtr);
+			CG_Context::sBuilder.CreateStore(intValue, valuePtrInfo.valuePtr);
 		}
 		else
-			CG_Context::sBuilder.CreateStore(pValue, pVarPtr);
+			CG_Context::sBuilder.CreateStore(pValue, valuePtrInfo.valuePtr);
 	}
 	else {
-		llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)vecElemIdx));
-		llvm::Value* updatedValue = CG_Context::sBuilder.CreateInsertElement(CG_Context::sBuilder.CreateLoad(pVarPtr), pValue, idx);
-		CG_Context::sBuilder.CreateStore(updatedValue, pVarPtr);
+		llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)valuePtrInfo.vecElemIdx));
+		llvm::Value* updatedValue = CG_Context::sBuilder.CreateInsertElement(CG_Context::sBuilder.CreateLoad(valuePtrInfo.valuePtr), pValue, idx);
+		CG_Context::sBuilder.CreateStore(updatedValue, valuePtrInfo.valuePtr);
 	}
 }
 
-llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+Exp_ValueEval::ValuePtrInfo Exp_DotOp::GetValuePtr(CG_Context* context) const
 {
-	int parentElemIdx = -1;
-	llvm::Value* parentPtr = mpExp->GetValuePtr(context, parentElemIdx);
+	Exp_ValueEval::ValuePtrInfo parentPtrInfo = mpExp->GetValuePtr(context);
 	
 	Exp_ValueEval::TypeInfo parentTypeInfo;
 	parentTypeInfo = mpExp->GetCachedTypeInfo();
 	const Exp_StructDef* pParentStructDef = parentTypeInfo.pStructDef;
-	vecElemIdx = -1;
-	if (parentPtr && parentElemIdx == -1) {
+	Exp_ValueEval::ValuePtrInfo retValuePtr;
+	retValuePtr.vecElemIdx = -1;
+	retValuePtr.valuePtr = NULL;
+	retValuePtr.belongToVector = false;
+
+	if (parentPtrInfo.valuePtr != NULL && parentPtrInfo.vecElemIdx == -1) {
 		
 		int elemIdx = -1;
 		if (pParentStructDef)
@@ -247,36 +249,40 @@ llvm::Value* Exp_DotOp::GetValuePtr(CG_Context* context, int& vecElemIdx) const
 			std::vector<llvm::Value*> indices(2);
 			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
 			indices[1] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)elemIdx));
-			llvm::Value* structElemPtr = CG_Context::sBuilder.CreateGEP(parentPtr, indices);
-			return structElemPtr;//CG_Context::sBuilder.CreateGEP(structElemPtr, indices[0]);
+			llvm::Value* structElemPtr = CG_Context::sBuilder.CreateGEP(parentPtrInfo.valuePtr, indices);
+			retValuePtr.valuePtr = structElemPtr;
+			retValuePtr.belongToVector = false;
+			return retValuePtr;
 		}
 		else {
 			// it should access ONE specific element with swizzling operator
 			int elemCnt = TypeElementCnt(GetCachedTypeInfo().type);
-			if (elemCnt != 1)
-				return NULL;
+			if (elemCnt != 1) {
+				return retValuePtr;
+			}
 			else {
 				int swizzleIdx[4];
 				ConvertSwizzle(mOpStr.c_str(), swizzleIdx);
-				vecElemIdx = swizzleIdx[0];
-				return parentPtr;
+				retValuePtr.valuePtr = parentPtrInfo.valuePtr;
+				retValuePtr.belongToVector = true;
+				retValuePtr.vecElemIdx = swizzleIdx[0];
+				return retValuePtr;
 			}
 		}
 	}
 	else 
-		return NULL;
+		return retValuePtr;
 	
 }
 
 llvm::Value* Exp_DotOp::GenerateCode(CG_Context* context) const
 {
-	int firstElemIdx = -1;
-	llvm::Value* dataPtr = GetValuePtr(context, firstElemIdx);
-	if (dataPtr) {
+	Exp_ValueEval::ValuePtrInfo valuePtrInfo = GetValuePtr(context);
+	if (valuePtrInfo.valuePtr) {
 		
-		llvm::Value* ret = CG_Context::sBuilder.CreateLoad(dataPtr);
-		if  (firstElemIdx != -1) {
-			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)firstElemIdx));
+		llvm::Value* ret = CG_Context::sBuilder.CreateLoad(valuePtrInfo.valuePtr);
+		if  (valuePtrInfo.belongToVector) {
+			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)valuePtrInfo.vecElemIdx));
 			ret = CG_Context::sBuilder.CreateExtractElement(ret, idx);
 		}
 		return ret;
@@ -337,39 +343,43 @@ llvm::Value* Exp_BuiltInInitializer::GenerateCode(CG_Context* context) const
 	}
 }
 
-llvm::Value* Exp_VariableRef::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+Exp_ValueEval::ValuePtrInfo Exp_VariableRef::GetValuePtr(CG_Context* context) const
 {
-	vecElemIdx = -1;
-	llvm::Value* varPtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
-	return varPtr;
+	Exp_ValueEval::ValuePtrInfo retValuePtr;
+	retValuePtr.belongToVector = false;
+	retValuePtr.valuePtr = context->GetVariablePtr(mpDef->GetVarName().ToStdString(), true);
+	retValuePtr.vecElemIdx = -1;
+	return retValuePtr;
 }
 
 llvm::Value* Exp_Indexer::GenerateCode(CG_Context* context) const
 {
-	int elemIdx = -1;
-	llvm::Value* ptr = GetValuePtr(context, elemIdx);
-	return CG_Context::sBuilder.CreateLoad(ptr);
+	Exp_ValueEval::ValuePtrInfo ptrInfo = GetValuePtr(context);
+	assert(ptrInfo.belongToVector == false);
+	return CG_Context::sBuilder.CreateLoad(ptrInfo.valuePtr);
 }
 
-llvm::Value* Exp_Indexer::GetValuePtr(CG_Context* context, int& vecElemIdx) const
+Exp_ValueEval::ValuePtrInfo Exp_Indexer::GetValuePtr(CG_Context* context) const
 {
-	vecElemIdx = -1;
+	Exp_ValueEval::ValuePtrInfo retValuePtr;
+	retValuePtr.vecElemIdx = -1;
+	retValuePtr.belongToVector = false;
 	llvm::Value* idx = mpIndex->GenerateCode(context);
-	int elemIdx = -1;
-	llvm::Value* parentPtr = mpExp->GetValuePtr(context, elemIdx);
-	assert(elemIdx = -1);
+	Exp_ValueEval::ValuePtrInfo parentPtrInfo = mpExp->GetValuePtr(context);
+	assert(parentPtrInfo.valuePtr != NULL && parentPtrInfo.belongToVector == false);
 
 	std::vector<llvm::Value*> indices(2);
 	indices[1] = idx;
 	indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
-	return CG_Context::sBuilder.CreateGEP(parentPtr, indices);
+	retValuePtr.valuePtr = CG_Context::sBuilder.CreateGEP(parentPtrInfo.valuePtr, indices);
+	return retValuePtr;
 }
 
 void Exp_Indexer::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
 {
-	int elemIdx = -1;
-	llvm::Value* ptr = GetValuePtr(context, elemIdx);
-	CG_Context::sBuilder.CreateStore(pValue, ptr);
+	Exp_ValueEval::ValuePtrInfo ptrInfo = GetValuePtr(context);
+	assert(ptrInfo.belongToVector == false);
+	CG_Context::sBuilder.CreateStore(pValue, ptrInfo.valuePtr);
 }
 
 llvm::Value* Exp_FunctionCall::GenerateCode(CG_Context* context) const
@@ -379,10 +389,9 @@ llvm::Value* Exp_FunctionCall::GenerateCode(CG_Context* context) const
 	std::vector<llvm::Value*> args;
 	for (int i = 0; i < (int)mInputArgs.size(); ++i) {
 		if (mpFuncDef->GetArgumentDesc(i)->isByRef) {
-			int dummyIdx = -1;
-			llvm::Value* argPtr = mInputArgs[i]->GetValuePtr(context, dummyIdx);
-			assert(dummyIdx == -1);
-			args.push_back(argPtr);
+			Exp_ValueEval::ValuePtrInfo argPtrInfo = mInputArgs[i]->GetValuePtr(context);
+			assert(argPtrInfo.valuePtr != NULL && argPtrInfo.belongToVector == false);
+			args.push_back(argPtrInfo.valuePtr);
 		}
 		else {
 			llvm::Value* argValue = mInputArgs[i]->GenerateCode(context);

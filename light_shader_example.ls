@@ -83,7 +83,10 @@ void HandleArray(ArrayCntr& ref)
 	my_array[2] = float3(2,3,4);
 	float mod_arg = 321;
 	SimpleCallee(mod_arg);
-	SimpleCallee(234.0f);
+
+	float abc[3];
+	SimpleCallee(abc[2]);
+
 	my_array[2].z = mod_arg;
 
 	ref.my_array[7] = my_array[2].z;
