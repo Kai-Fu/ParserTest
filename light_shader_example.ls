@@ -70,9 +70,10 @@ struct ArrayCntr {
 	float my_array[13];
 };
 
-float SimpleCallee(float arg) 
+float SimpleCallee(float& arg) 
 {
-	return arg + 123.5f;
+	arg = arg + 123.5f;
+	return arg;
 }
 
 void HandleArray(ArrayCntr& ref)
@@ -80,9 +81,12 @@ void HandleArray(ArrayCntr& ref)
 	float3 my_array[13];
 
 	my_array[2] = float3(2,3,4);
-	my_array[2].z = SimpleCallee(4.56f);
+	float mod_arg = 321;
+	SimpleCallee(mod_arg);
+	SimpleCallee(234.0f);
+	my_array[2].z = mod_arg;
 
-	ref.my_array[7] = SimpleCallee(0.123);
+	ref.my_array[7] = my_array[2].z;
 	return;
 }
 
