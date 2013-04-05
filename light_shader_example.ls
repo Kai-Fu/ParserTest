@@ -86,6 +86,13 @@ void HandleArray(ArrayCntr& ref)
 
 	float abc[3];
 	SimpleCallee(abc[2]);
+	if (abc[2] > 0) 
+		abc[1] = 345.0f;
+	else {
+		abc[0] = 100;
+	}
+
+
 
 	my_array[2].z = mod_arg;
 

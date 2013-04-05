@@ -19,6 +19,7 @@ namespace SC {
 	class Exp_VarDef;
 	class Exp_ValueEval;
 	class CG_Context;
+	class Exp_If;
 
 	enum KeyWord {
 		kStructDef,
@@ -154,6 +155,7 @@ namespace SC {
 		virtual void AddVarDefExpression(Exp_VarDef* exp);
 		void AddFunctionDefExpression(Exp_FunctionDecl* exp);
 		void AddDomainExpression(CodeDomain* exp);
+		void AddIfExpression(Exp_If* exp);
 
 		bool IsTypeDefined(const std::string& typeName) const;
 		bool IsVariableDefined(const std::string& varName, bool includeParent) const;
@@ -428,10 +430,14 @@ namespace SC {
 	private:
 		CodeDomain mIfDomain;
 		CodeDomain mElseDomain;
+		Exp_ValueEval* mpCondValue;
 	public:
-		Exp_If();
+		Exp_If(CodeDomain* parent);
 		virtual ~Exp_If();
+		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 
+		virtual bool CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+		static Exp_If* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
 	class RootDomain : public CodeDomain
@@ -457,7 +463,8 @@ namespace SC {
 			kAllowVarDef		= 0x00000004,
 			kAllowReturnExp		= 0x00000008,
 			kAlllowStructDef	= 0x00000010,
-			kAlllowFuncDef		= 0x00000020
+			kAlllowFuncDef		= 0x00000020,
+			kAllowIfExp			= 0x00000040
 		};
 	private:
 		const char* mContentPtr;
@@ -476,6 +483,7 @@ namespace SC {
 		bool IsVarDefinePartten(bool allowInit);
 		bool IsStructDefinePartten();
 		bool IsFunctionDefinePartten();
+		bool IsIfExpPartten();
 
 		bool ParseSingleExpression(CodeDomain* curDomain, const char* endT);
 		

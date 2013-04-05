@@ -728,6 +728,19 @@ bool CompilingContext::IsFunctionDefinePartten()
 	return true;
 }
 
+bool CompilingContext::IsIfExpPartten()
+{
+	Token t0 = PeekNextToken(0);
+	Token t1 = PeekNextToken(1);
+
+	if (!t0.IsValid() || !t1.IsValid())
+		return false;
+
+	if (t0.IsEqual("if") && t1.IsEqual("("))
+		return true;
+	
+	return false;
+}
 
 bool CompilingContext::IsVarDefinePartten(bool allowInit)
 {
@@ -948,6 +961,13 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 
 	if (endT && PeekNextToken(0).IsEqual(endT))
 		return false;
+	else if ((GetStatusCode() & kAllowIfExp) && IsIfExpPartten()) {
+		Exp_If * pIf = Exp_If::Parse(*this, curDomain);
+		if (!pIf) {
+			return false;
+		}
+		curDomain->AddIfExpression(pIf);
+	}
 	else if ((GetStatusCode() & kAlllowFuncDef) && IsFunctionDefinePartten()) {
 		// Parse the function declaration.
 		if (!Exp_FunctionDecl::Parse(*this, curDomain))
@@ -1136,6 +1156,13 @@ void CodeDomain::AddFunctionDefExpression(Exp_FunctionDecl* exp)
 }
 
 void CodeDomain::AddDomainExpression(CodeDomain* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+	}
+}
+
+void CodeDomain::AddIfExpression(Exp_If* exp)
 {
 	if (exp) {
 		mExpressions.push_back(exp);
@@ -2029,7 +2056,9 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		}
 
 		// Now parse the function body
-		context.PushStatusCode(CompilingContext::kAlllowStructDef | CompilingContext::kAllowReturnExp | CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef | CompilingContext::kAllowVarInit);
+		context.PushStatusCode(CompilingContext::kAlllowStructDef | CompilingContext::kAllowReturnExp | 
+			CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef |
+			CompilingContext::kAllowVarInit | CompilingContext::kAllowIfExp);
 		if (!context.ParseCodeDomain(pFuncDef, NULL))
 			ret = false;
 		context.PopStatusCode();
@@ -2245,6 +2274,106 @@ bool Exp_Indexer::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 bool Exp_Indexer::IsAssignable(bool allowSwizzle) const
 {
 	return GetCachedTypeInfo().assignable;
+}
+
+Exp_If::Exp_If(CodeDomain* parent) :
+	mIfDomain(parent), mElseDomain(parent)
+{
+	mpCondValue = NULL;
+}
+
+Exp_If::~Exp_If()
+{
+	if (mpCondValue)
+		delete mpCondValue;
+}
+
+llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
+{
+	// TODO:
+	return NULL;
+}
+
+bool Exp_If::CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	// TODO:
+	return false;
+}
+
+Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
+{
+	Token curT = context.GetNextToken();
+	if (!curT.IsEqual("if")) {
+		context.AddErrorMessage(curT, "\"if\" is expected.");
+		return NULL;
+	}
+
+	curT = context.GetNextToken();
+	if (!curT.IsEqual("(")) {
+		context.AddErrorMessage(curT, "\"(\" is expected.");
+		return NULL;
+	}
+
+	// Parse the condition expression
+	//
+	std::auto_ptr<Exp_If> result(new Exp_If(curDomain));
+	result->mpCondValue = context.ParseComplexExpression(curDomain, ")");
+	if (!result->mpCondValue) {
+		// Bad condition expression
+		return NULL;
+	}
+
+	context.GetNextToken(); // Eat the ending ")" of condition expression
+
+	// Parse the if code block
+	//
+	curT = context.PeekNextToken(0);
+	if (curT.IsEqual("{")) {
+		context.GetNextToken();  // Eat the "{"
+		if (!context.ParseCodeDomain(&result->mIfDomain, "}")) {
+			return NULL;
+		}
+		context.GetNextToken();  // Eat the "}"
+	}
+	else {
+		Exp_ValueEval* pIfExp = context.ParseComplexExpression(curDomain, ";");
+		if (pIfExp) {
+			context.GetNextToken();
+			result->mIfDomain.AddValueExpression(pIfExp);
+		}
+		else {
+			context.AddErrorMessage(curT, "Invalid if expression.");
+			return NULL;
+		}
+	}
+
+	// Optionally parse the else code block
+	//
+	curT = context.PeekNextToken(0);
+	if (curT.IsEqual("else")) {
+		context.GetNextToken(); // Eat the "else"
+
+		curT = context.PeekNextToken(0);
+		if (curT.IsEqual("{")) {
+			context.GetNextToken();  // Eat the "{"
+			if (!context.ParseCodeDomain(&result->mElseDomain, "}")) {
+				return NULL;
+			}
+			context.GetNextToken();  // Eat the "}"
+		}
+		else {
+			Exp_ValueEval* pIfExp = context.ParseComplexExpression(curDomain, ";");
+			if (pIfExp) {
+				context.GetNextToken();
+				result->mElseDomain.AddValueExpression(pIfExp);
+			}
+			else {
+				context.AddErrorMessage(curT, "Invalid else expression.");
+				return NULL;
+			}
+		}
+	}
+	return result.release();
 }
 
 #ifdef WANT_MEM_LEAK_CHECK
