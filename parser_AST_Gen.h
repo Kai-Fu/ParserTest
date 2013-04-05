@@ -484,8 +484,6 @@ namespace SC {
 		bool IsStructDefinePartten();
 		bool IsFunctionDefinePartten();
 		bool IsIfExpPartten();
-
-		bool ParseSingleExpression(CodeDomain* curDomain, const char* endT);
 		
 		Token ScanForToken(std::string& errorMsg);
 
@@ -510,6 +508,8 @@ namespace SC {
 		void PushStatusCode(int code);
 		int GetStatusCode();
 		void PopStatusCode();
+
+		bool ParseSingleExpression(CodeDomain* curDomain, const char* endT);
 
 		bool ParseCodeDomain(CodeDomain* curDomain, const char* endT);
 		// Simple expression means the expression is in the bracket pair or it is a expression other than a binary operation.

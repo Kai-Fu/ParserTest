@@ -85,11 +85,15 @@ void HandleArray(ArrayCntr& ref)
 	SimpleCallee(mod_arg);
 
 	float abc[3];
+	abc[2] = -124;
 	SimpleCallee(abc[2]);
-	if (abc[2] > 0) 
-		abc[1] = 345.0f;
+	if (abc[2] > 0) {
+		ref.my_array[0] = abc[2];
+		ref.my_array[2] = 100;
+		}
 	else {
-		abc[0] = 100;
+		ref.my_array[0] = 100;
+		ref.my_array[3] = 100;
 	}
 
 

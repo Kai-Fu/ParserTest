@@ -851,6 +851,7 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 				}
 				bool FtoI = false;
 				if (!IsTypeCompatible(varType, typeInfo.type, FtoI)) {
+					context.AddErrorMessage(firstT, "Bad initializing expression.");
 					delete pInitValue;
 					return false;
 				}
@@ -964,6 +965,14 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 	else if ((GetStatusCode() & kAllowIfExp) && IsIfExpPartten()) {
 		Exp_If * pIf = Exp_If::Parse(*this, curDomain);
 		if (!pIf) {
+			return false;
+		}
+		Exp_ValueEval::TypeInfo outType;
+		std::string errMsg;
+		std::vector<std::string> warnMsg;
+		if (!pIf->CheckSemantic(outType, errMsg, warnMsg)) {
+			AddErrorMessage(firstT, errMsg);
+			delete pIf;
 			return false;
 		}
 		curDomain->AddIfExpression(pIf);
@@ -1355,7 +1364,7 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 		// This identifier must be a already defined variable, built-in type or constant
 		TypeDesc tpDesc;
 		if (IsBuiltInType(curT, &tpDesc) && (IsFloatType(tpDesc.type) || IsIntegerType(tpDesc.type))) {
-			// Parse and return the built-in type initialize
+			// Parse and return the built-in type initializer
 			if (!ExpectAndEat("(")) return NULL;
 
 			std::auto_ptr<Exp_ValueEval> exp[4];
@@ -2288,16 +2297,20 @@ Exp_If::~Exp_If()
 		delete mpCondValue;
 }
 
-llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
-{
-	// TODO:
-	return NULL;
-}
-
 bool Exp_If::CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
 {
-	// TODO:
-	return false;
+	Exp_ValueEval::TypeInfo condType;
+	if (!mpCondValue->CheckSemantic(condType, errMsg, warnMsg)) {
+		return false;
+	}
+
+	if (condType.type != VarType::kBoolean) {
+		errMsg = "The condition value of if expression must be boolean.";
+		return false;
+	}
+
+
+	return true;
 }
 
 Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
@@ -2336,12 +2349,8 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 		context.GetNextToken();  // Eat the "}"
 	}
 	else {
-		Exp_ValueEval* pIfExp = context.ParseComplexExpression(curDomain, ";");
-		if (pIfExp) {
-			context.GetNextToken();
-			result->mIfDomain.AddValueExpression(pIfExp);
-		}
-		else {
+		if (!context.ParseSingleExpression(&result->mIfDomain, ";")) {
+			context.GetNextToken(); // Eat the ";"
 			context.AddErrorMessage(curT, "Invalid if expression.");
 			return NULL;
 		}
@@ -2362,12 +2371,8 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 			context.GetNextToken();  // Eat the "}"
 		}
 		else {
-			Exp_ValueEval* pIfExp = context.ParseComplexExpression(curDomain, ";");
-			if (pIfExp) {
-				context.GetNextToken();
-				result->mElseDomain.AddValueExpression(pIfExp);
-			}
-			else {
+			if (!context.ParseSingleExpression(&result->mElseDomain, ";")) {
+				context.GetNextToken(); // Eat the ";"
 				context.AddErrorMessage(curT, "Invalid else expression.");
 				return NULL;
 			}

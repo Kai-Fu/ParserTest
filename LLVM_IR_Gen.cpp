@@ -401,4 +401,52 @@ llvm::Value* Exp_FunctionCall::GenerateCode(CG_Context* context) const
 	return CG_Context::sBuilder.CreateCall(pF, args);
 }
 
+
+llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
+{
+	llvm::Value* condValue = mpCondValue->GenerateCode(context);
+  
+	Function *pCurFunc = CG_Context::sBuilder.GetInsertBlock()->getParent();
+	assert(pCurFunc);
+
+	// Create blocks for the then and else cases.  Insert the 'then' block at the
+	// end of the function.
+	BasicBlock* pThenBB = BasicBlock::Create(getGlobalContext(), "then", pCurFunc);
+	BasicBlock* pElseBB = BasicBlock::Create(getGlobalContext(), "else");
+	BasicBlock* pMergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
+  
+	CG_Context::sBuilder.CreateCondBr(condValue, pThenBB, pElseBB);
+  
+	// Emit then value.
+	CG_Context::sBuilder.SetInsertPoint(pThenBB);
+  
+	mIfDomain.GenerateCode(context);
+  
+	CG_Context::sBuilder.CreateBr(pMergeBB);
+	// Codegen of 'Then' can change the current block, update ThenBB for the PHI.
+	pThenBB = CG_Context::sBuilder.GetInsertBlock();
+  
+	// Emit else block.
+	pCurFunc->getBasicBlockList().push_back(pElseBB);
+	CG_Context::sBuilder.SetInsertPoint(pElseBB);
+  
+	mElseDomain.GenerateCode(context);
+  
+	CG_Context::sBuilder.CreateBr(pMergeBB);
+	// Codegen of 'Else' can change the current block, update ElseBB for the PHI.
+	pElseBB = CG_Context::sBuilder.GetInsertBlock();
+  
+	// Emit merge block.
+	pCurFunc->getBasicBlockList().push_back(pMergeBB);
+	CG_Context::sBuilder.SetInsertPoint(pMergeBB);
+	llvm::Type* phiRetTy = SC_INT_TYPE;
+	llvm::PHINode *PN = CG_Context::sBuilder.CreatePHI(phiRetTy, 2, "iftmp");
+  
+	llvm::Value* voidUndef = llvm::UndefValue::get(phiRetTy);
+	PN->addIncoming(voidUndef, pThenBB);
+	PN->addIncoming(voidUndef, pElseBB);
+	return NULL;
+}
+
+
 } // namespace SC
