@@ -376,7 +376,7 @@ CompilingContext::CompilingContext(const char* content)
 	mContentPtr = content;
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 0;
-	mRootCodeDomain = NULL;
+	mRootCodeDomain = new RootDomain();
 }
 
 CompilingContext::~CompilingContext()
@@ -671,11 +671,16 @@ bool CompilingContext::HasErrorMessage() const
 	return !mErrorMessages.empty();
 }
 
-void CompilingContext::PrintErrorMessage() const
+void CompilingContext::PrintErrorMessage(std::string* outStr) const
 {
+	char tempBuf[400];
 	std::list<std::pair<Token, std::string> >::const_iterator it = mErrorMessages.begin();
 	while (it != mErrorMessages.end()) {
-		printf("line(%d): %s\n", it->first.GetLOC(), it->second.c_str());
+		sprintf_s(tempBuf, "line(%d): %s\n", it->first.GetLOC(), it->second.c_str());
+		if (outStr) 
+			*outStr = tempBuf;
+		else
+			printf(tempBuf);
 		++it;
 	}
 }
@@ -709,9 +714,14 @@ bool CompilingContext::IsStructDefinePartten()
 
 bool CompilingContext::IsFunctionDefinePartten()
 {
-	Token t0 = PeekNextToken(0);
-	Token t1 = PeekNextToken(1);
-	Token t2 = PeekNextToken(2);
+	int idx = 0;
+	if (PeekNextToken(0).IsEqual("extern")) {
+		++idx;
+	}
+
+	Token t0 = PeekNextToken(idx++);
+	Token t1 = PeekNextToken(idx++);
+	Token t2 = PeekNextToken(idx++);
 
 	if (!t0.IsValid() || !t1.IsValid() || !t2.IsValid())
 		return false;
@@ -931,7 +941,7 @@ Exp_ValueEval::TypeInfo::TypeInfo()
 	assignable = false;
 }
 
-bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI)
+bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI) const
 {
 	FtoI = false;
 	if (from.arraySize > 0 || arraySize > 0)
@@ -943,7 +953,7 @@ bool Exp_ValueEval::TypeInfo::IsTypeCompatible(const TypeInfo& from, bool& FtoI)
 		return SC::IsTypeCompatible(type, from.type, FtoI);
 }
 
-bool Exp_ValueEval::TypeInfo::IsSameType(const TypeInfo& ref)
+bool Exp_ValueEval::TypeInfo::IsSameType(const TypeInfo& ref) const
 {
 	if (type != ref.type ||
 		pStructDef != ref.pStructDef ||
@@ -1928,6 +1938,7 @@ Exp_FunctionDecl::Exp_FunctionDecl(CodeDomain* parent) :
 {
 	mReturnType = VarType::kInvalid;
 	mpRetStruct = NULL;
+	mHasBody = false;
 }
 
 Exp_FunctionDecl::~Exp_FunctionDecl()
@@ -1968,13 +1979,17 @@ bool Exp_FunctionDecl::HasSamePrototype(const Exp_FunctionDecl& ref) const
 		return false;
 	for (int i = 0; i < (int)mArgments.size(); ++i) {
 		if (mArgments[i].isByRef != ref.mArgments[i].isByRef ||
-			mArgments[i].typeInfo.type != ref.mArgments[i].typeInfo.type ||
-			mArgments[i].typeInfo.pStructDef != ref.mArgments[i].typeInfo.pStructDef ||
-			mArgments[i].token.IsEqual(ref.mArgments[i].token) )
-			return NULL;
+			!mArgments[i].typeInfo.IsSameType(ref.mArgments[i].typeInfo) )
+			return false;
 	}
 	return true;
 }
+
+bool Exp_FunctionDecl::HasBody() const
+{
+	return mHasBody;
+}
+
 
 Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 {
@@ -1985,13 +2000,13 @@ Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 		return mpParentDomain ? mpParentDomain->GetFunctionDeclByName(funcName) : NULL;
 }
 
-bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
+Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 {
 	std::auto_ptr<Exp_FunctionDecl> result(new Exp_FunctionDecl(curDomain));
 	// The first token needs to be the returned type of the function
 	//
 	if (!context.ExpectTypeAndEat(curDomain, result->mReturnType, result->mpRetStruct))
-		return false;
+		return NULL;
 
 	// The second token should be the function name
 	//
@@ -2004,11 +2019,11 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 	// e.g. (Type0 arg0, Type1 arg1)
 	//
 	if (!context.ExpectAndEat("("))
-		return false;
+		return NULL;
 	while (!context.PeekNextToken(0).IsEqual(")")) {
 		Exp_FunctionDecl::ArgDesc argDesc;
 		if (!context.ExpectTypeAndEat(curDomain, argDesc.typeInfo.type, argDesc.typeInfo.pStructDef))
-			return false;
+			return NULL;
 
 		argDesc.isByRef = false;
 		if (context.PeekNextToken(0).IsEqual("&")) {
@@ -2019,7 +2034,7 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		for (int i = 0; i < (int)result->mArgments.size(); ++i) {
 			if (argT.IsEqual(result->mArgments[i].token)) {
 				context.AddErrorMessage(curT, "Function argument redefined.");
-				return false;
+				return NULL;
 			}
 		}
 		argDesc.token = argT;
@@ -2034,11 +2049,11 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 
 	Exp_FunctionDecl* pFuncDef = NULL;
 	if (alreadyDefined) {
-		Exp_FunctionDecl* pFuncDef = curDomain->GetFunctionDeclByName(result->mFuncName);
+		pFuncDef = curDomain->GetFunctionDeclByName(result->mFuncName);
 		assert(pFuncDef);
 		if (!result->HasSamePrototype(*pFuncDef)) {
 			context.AddErrorMessage(curT, "Function declared with different prototype.");
-			return false;
+			return NULL;
 		}
 		result.reset(NULL);
 	}
@@ -2047,13 +2062,13 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 		curDomain->AddFunctionDefExpression(result.release());
 	}
 
-	bool ret = true;
-	if (context.PeekNextToken(0).IsEqual("{")) {
+	Exp_FunctionDecl* ret = pFuncDef;
+	if (!ret->mHasBody && context.PeekNextToken(0).IsEqual("{")) {
 		// The function body is expected, if there is already a function body for this function, kick it out.
 		if (alreadyDefined) {
 			if (!pFuncDef->mExpressions.empty()) {
 				context.AddErrorMessage(curT, "Function already has a body.");
-				return false;
+				return NULL;
 			}
 		}
 
@@ -2069,15 +2084,25 @@ bool Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 			CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef |
 			CompilingContext::kAllowVarInit | CompilingContext::kAllowIfExp);
 		if (!context.ParseCodeDomain(pFuncDef, NULL))
-			ret = false;
+			ret = NULL;
 		context.PopStatusCode();
 
 		// If this function returns a value except void type, check if all the code paths have return expressions.
 		if (pFuncDef->mReturnType != VarType::kVoid) {
 			if (!pFuncDef->HasReturnExpForAllPaths()) {
 				context.AddErrorMessage(funcNameT, "Not all path has the return value.");
-				ret = false;
+				ret = NULL;
 			}
+		}
+		ret->mHasBody = true;
+	}
+	else {
+		if (context.PeekNextToken(0).IsEqual(";")) {
+			context.GetNextToken(); // Eat the ending ";"
+		}
+		else {
+			context.AddErrorMessage(funcNameT, "Bad function declaration.");
+			ret = NULL;
 		}
 	}
 

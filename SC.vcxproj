@@ -89,11 +89,13 @@
     <ClCompile Include="parser_AST_Gen.cpp" />
     <ClCompile Include="parser_defines.cpp" />
     <ClCompile Include="SC.cpp" />
+    <ClCompile Include="SC_API.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="IR_Gen_Context.h" />
     <ClInclude Include="parser_AST_Gen.h" />
     <ClInclude Include="parser_defines.h" />
+    <ClInclude Include="SC_API.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="light_shader_example.ls" />

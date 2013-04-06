@@ -182,6 +182,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 	assert(pFuncBody);
 	pFuncBody->GenerateCode(funcGC_ctx);
 
+	delete funcGC_ctx;
 	return F;
 }
 
@@ -191,6 +192,7 @@ llvm::Value* CodeDomain::GenerateCode(CG_Context* context) const
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
 		mExpressions[i]->GenerateCode(domain_ctx);
 	}
+	delete domain_ctx;
 	return NULL; // the domain doesn't have the value to return
 }
 
@@ -406,7 +408,7 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 {
 	llvm::Value* condValue = mpCondValue->GenerateCode(context);
   
-	Function *pCurFunc = CG_Context::sBuilder.GetInsertBlock()->getParent();
+	Function *pCurFunc = context->GetCurrentFunc();
 	assert(pCurFunc);
 
 	// Create blocks for the then and else cases.  Insert the 'then' block at the
@@ -420,7 +422,12 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 	// Emit then value.
 	CG_Context::sBuilder.SetInsertPoint(pThenBB);
   
-	mIfDomain.GenerateCode(context);
+	{
+		// Code gen for if block
+		CG_Context* childCtx = context->CreateChildContext(pCurFunc);
+		mIfDomain.GenerateCode(childCtx);
+		delete childCtx;
+	}
   
 	CG_Context::sBuilder.CreateBr(pMergeBB);
 	// Codegen of 'Then' can change the current block, update ThenBB for the PHI.
@@ -430,7 +437,12 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 	pCurFunc->getBasicBlockList().push_back(pElseBB);
 	CG_Context::sBuilder.SetInsertPoint(pElseBB);
   
-	mElseDomain.GenerateCode(context);
+	{
+		// Code gen for else block
+		CG_Context* childCtx = context->CreateChildContext(pCurFunc);
+		mElseDomain.GenerateCode(context->CreateChildContext(pCurFunc));
+		delete childCtx;
+	}
   
 	CG_Context::sBuilder.CreateBr(pMergeBB);
 	// Codegen of 'Else' can change the current block, update ElseBB for the PHI.

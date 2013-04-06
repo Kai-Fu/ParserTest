@@ -38,6 +38,13 @@ bool InitializeCodeGen()
 
 	CG_Context::TheFPM->doInitialization();
 
+
+	// Set up the executing engine
+	//
+	// the sybmoll searching(e.g. for standard CRT) is disabled
+	CG_Context::TheExecutionEngine->DisableSymbolSearching(true);
+
+
 	return true;
 }
 
@@ -209,7 +216,7 @@ bool RootDomain::JIT_Compile()
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
 		llvm::Value* value = mExpressions[i]->GenerateCode(cgCtx);
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
-		if (pFuncDecl) {
+		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
 			llvm::verifyFunction(*funcValue, llvm::PrintMessageAction);
 
@@ -217,7 +224,7 @@ bool RootDomain::JIT_Compile()
 			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcPtr;
 		}
 	}
-
+	delete cgCtx;
 	CG_Context::TheModule->dump();
 	return true;
 }

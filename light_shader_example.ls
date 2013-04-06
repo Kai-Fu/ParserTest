@@ -65,6 +65,8 @@ float HandleVector(float3& ref)
 	return 3.14f;
 }*/
 
+//float SimpleCallee(float& arg);
+
 struct ArrayCntr {
 	float abc;
 	float my_array[13];

@@ -221,8 +221,8 @@ namespace SC {
 			bool assignable;
 
 			TypeInfo();
-			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI);
-			bool IsSameType(const TypeInfo& ref);
+			bool IsTypeCompatible(const TypeInfo& from, bool& FtoI) const;
+			bool IsSameType(const TypeInfo& ref) const;
 		};
 
 		struct ValuePtrInfo {
@@ -384,6 +384,7 @@ namespace SC {
 		const Exp_StructDef* mpRetStruct;
 		std::string mFuncName;
 		std::vector<ArgDesc> mArgments;
+		bool mHasBody;
 
 	public:
 		Exp_FunctionDecl(CodeDomain* parent);
@@ -395,8 +396,9 @@ namespace SC {
 		int GetArgumentCnt() const;
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
+		bool HasBody() const;
 
-		static bool Parse(CompilingContext& context, CodeDomain* curDomain);
+		static Exp_FunctionDecl* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
 	class Exp_FuncRet : public Exp_ValueEval
@@ -493,7 +495,7 @@ namespace SC {
 
 		void AddErrorMessage(const Token& token, const std::string& str);
 		bool HasErrorMessage() const;
-		void PrintErrorMessage() const;
+		void PrintErrorMessage(std::string* outStr = NULL) const;
 
 		void AddWarningMessage(const Token& token, const std::string& str);
 		bool IsEOF() const;

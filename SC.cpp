@@ -2,8 +2,8 @@
 //
 
 #include <stdio.h>
-#include "parser_AST_Gen.h"
-#include "IR_Gen_Context.h"
+#include "SC_API.h"
+#include <string.h>
 
 struct TestStruct1
 {
@@ -16,8 +16,7 @@ struct TestStruct1
 
 int main(int argc, char* argv[])
 {
-	SC::Initialize_AST_Gen();
-	SC::InitializeCodeGen();
+	InitializeKSC();
 
 	FILE* f = NULL;
 	fopen_s(&f, "light_shader_example.ls", "r");
@@ -41,22 +40,15 @@ int main(int argc, char* argv[])
 		return -1;
 	else {
 		content[totalLen] = '\0';
-		SC::CompilingContext ctx(content);
-		ctx.Parse(content);
-		/*while (1) {
-			SC::Token curT = ctx.GetNextToken();
-			if (curT.IsValid())
-				printf("%s\n", curT.ToStdString().c_str());
-			else
-				break;
+		const char* funcNames[1];
+		void* funcPtrs[1];
 
-		}*/
-		if (ctx.HasErrorMessage()) {
-			ctx.PrintErrorMessage();
-			return -1;
+		funcNames[0] = "HandleArray";
+
+		if (!Compile(content, funcNames, 1, funcPtrs)) {
+			printf(GetLastErrorMsg());
 		}
 
-		ctx.JIT_Compile();
 		float ret;
 		/*TestStruct1 mod = {0.0f, 1234, 0.0f};
 		float (*FP)(TestStruct1* a) = (float (*)(TestStruct1* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
@@ -80,12 +72,12 @@ int main(int argc, char* argv[])
 			float my_array[13];
 		};
 		ArrayCntr array_ref;
-		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleArray");
+		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))funcPtrs[0];
 		HandleArray(&array_ref);
 	}
 	
 
-	SC::Finish_AST_Gen();
+	//DestoryKSC();
 	return 0;
 }
 
