@@ -5,14 +5,6 @@
 #include "SC_API.h"
 #include <string.h>
 
-struct TestStruct1
-{
-	float a;
-	int cond;
-	int ib[2];
-	float b;
-};
-
 float SimpleCallee(float* arg) 
 {
 	*arg = *arg + 123.5f;
@@ -54,25 +46,8 @@ int main(int argc, char* argv[])
 
 		if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
 			printf(KSC_GetLastErrorMsg());
+			return -1;
 		}
-
-		float ret;
-		/*TestStruct1 mod = {0.0f, 1234, 0.0f};
-		float (*FP)(TestStruct1* a) = (float (*)(TestStruct1* a))(intptr_t)ctx.GetJITedFuncPtr("RetSimpleValue");
-		ret = FP(&mod);
-
-		float (*FP_Dis)(float a, float b) = (float (*)(float a, float b))(intptr_t)ctx.GetJITedFuncPtr("DistanceSqr");
-		ret = FP_Dis(1.5f, 6.3f);
-
-		int (*TwoIntegerBinary)(int a, int b) = (int (*)(int a, int b))(intptr_t)ctx.GetJITedFuncPtr("TwoIntegerBinary");
-		int iRet = TwoIntegerBinary(7, -3);
-
-		float (*FloatAndIntBinary)(float a, int b) = (float (*)(float a, int b))(intptr_t)ctx.GetJITedFuncPtr("FloatAndIntBinary");
-		ret = FloatAndIntBinary(7.123f, -3);
-
-		float vData[3];
-		float (*HandleVector)(float* ref) = (float (*)(float* ref))(intptr_t)ctx.GetJITedFuncPtr("HandleVector");
-		ret = HandleVector(vData);*/
 
 		struct ArrayCntr {
 			float abc;
