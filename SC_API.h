@@ -8,11 +8,10 @@
 
 extern "C" {
 
-	KSC_API bool InitializeKSC();
-	KSC_API void DestoryKSC();
-	KSC_API const char* GetLastErrorMsg();
-	KSC_API bool AddExternalFunction(const char* functDecl, void* funcPtr);
-	KSC_API bool Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr);
+	KSC_API bool KSC_Initialize();
+	KSC_API const char* KSC_GetLastErrorMsg();
+	KSC_API bool KSC_AddExternalFunction(const char* funcName, void* funcPtr);
+	KSC_API bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr);
 
 }
 

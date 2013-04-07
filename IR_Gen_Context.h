@@ -43,6 +43,7 @@ public:
 	static llvm::ExecutionEngine* TheExecutionEngine;
 	static llvm::FunctionPassManager* TheFPM;
 	static llvm::IRBuilder<> sBuilder;
+	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);

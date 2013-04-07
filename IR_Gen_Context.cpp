@@ -6,6 +6,7 @@ llvm::IRBuilder<> CG_Context::sBuilder(getGlobalContext());
 llvm::Module* CG_Context::TheModule = NULL;
 llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
 llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
+std::hash_map<std::string, void*> CG_Context::sGlobalFuncSymbols;
 
 bool InitializeCodeGen()
 {

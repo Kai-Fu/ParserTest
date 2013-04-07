@@ -6,32 +6,32 @@
 
 static std::string			s_lastErrMsg;
 
-bool InitializeKSC()
+bool KSC_Initialize()
 {
 	SC::Initialize_AST_Gen();
 	return SC::InitializeCodeGen();
 }
 
 
-void DestoryKSC()
+void KSC_Destory()
 {
 	SC::DestoryCodeGen();
 	SC::Finish_AST_Gen();
 }
 
 
-const char* GetLastErrorMsg()
+const char* KSC_GetLastErrorMsg()
 {
 	return s_lastErrMsg.c_str();
 }
 
-bool AddExternalFunction(const char* functDecl, void* funcPtr)
+bool KSC_AddExternalFunction(const char* funcName, void* funcPtr)
 {
-	// TODO:
+	SC::CG_Context::sGlobalFuncSymbols[funcName] = funcPtr;
 	return true;
 }
 
-bool Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr)
+bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr)
 {
 	SC::CompilingContext scContext(NULL);
 	if (!scContext.Parse(sourceCode)) {

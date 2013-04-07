@@ -13,10 +13,15 @@ struct TestStruct1
 	float b;
 };
 
+float SimpleCallee(float* arg) 
+{
+	*arg = *arg + 123.5f;
+	return *arg;
+}
 
 int main(int argc, char* argv[])
 {
-	InitializeKSC();
+	KSC_Initialize();
 
 	FILE* f = NULL;
 	fopen_s(&f, "light_shader_example.ls", "r");
@@ -44,9 +49,11 @@ int main(int argc, char* argv[])
 		void* funcPtrs[1];
 
 		funcNames[0] = "HandleArray";
+		KSC_AddExternalFunction("SimpleCallee", SimpleCallee);
 
-		if (!Compile(content, funcNames, 1, funcPtrs)) {
-			printf(GetLastErrorMsg());
+
+		if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
+			printf(KSC_GetLastErrorMsg());
 		}
 
 		float ret;
@@ -77,7 +84,6 @@ int main(int argc, char* argv[])
 	}
 	
 
-	//DestoryKSC();
 	return 0;
 }
 

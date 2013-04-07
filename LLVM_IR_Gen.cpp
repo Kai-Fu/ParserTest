@@ -120,34 +120,52 @@ llvm::Value* Exp_BinaryOp::GenerateCode(CG_Context* context) const
 llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 {
 	// handle the argument types
-	std::vector<llvm::Type*> funcArgTypes(mArgments.size());
-	for (int i = 0; i < (int)mArgments.size(); ++i) {
+	Function *F = context->GetFuncDeclByName(mFuncName);
+	if (!F) {
+		std::vector<llvm::Type*> funcArgTypes(mArgments.size());
+		for (int i = 0; i < (int)mArgments.size(); ++i) {
 
-		VarType scType = mArgments[i].typeInfo.type;
+			VarType scType = mArgments[i].typeInfo.type;
 		
-		if (scType == VarType::kStructure) {
-			funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
-		}
-		else {
-			funcArgTypes[i] = context->ConvertToLLVMType(scType);
-		}
+			if (scType == VarType::kStructure) {
+				funcArgTypes[i] = context->GetStructType(mArgments[i].typeInfo.pStructDef);
+			}
+			else {
+				funcArgTypes[i] = context->ConvertToLLVMType(scType);
+			}
 
-		if (mArgments[i].isByRef) 
-			funcArgTypes[i] =  llvm::PointerType::get(funcArgTypes[i], 0);
+			if (mArgments[i].isByRef) 
+				funcArgTypes[i] =  llvm::PointerType::get(funcArgTypes[i], 0);
 	
-	}
-	// handle the return type
-	llvm::Type* retType = NULL;
-	if (mReturnType == VarType::kStructure) {
-		retType = context->GetStructType(mpRetStruct);
-	}
-	else 
-		retType = context->ConvertToLLVMType(mReturnType);
+		}
+		// handle the return type
+		llvm::Type* retType = NULL;
+		if (mReturnType == VarType::kStructure) {
+			retType = context->GetStructType(mpRetStruct);
+		}
+		else 
+			retType = context->ConvertToLLVMType(mReturnType);
 
-	FunctionType *FT = FunctionType::get(retType, funcArgTypes, false);
-	Function *F = Function::Create(FT, Function::ExternalLinkage, mFuncName, CG_Context::TheModule);
+		FunctionType *FT = FunctionType::get(retType, funcArgTypes, false);
+		F = Function::Create(FT, Function::ExternalLinkage, mFuncName, CG_Context::TheModule);
+	}
+
 	if (F) {
 		context->AddFunctionDecl(mFuncName, F);
+	}
+	else {
+		return NULL;
+	}
+
+	if (!mHasBody) {
+		// Function doens't have the body, so it must be an external function.
+		if (CG_Context::sGlobalFuncSymbols.find(mFuncName) != CG_Context::sGlobalFuncSymbols.end()) {
+			CG_Context::TheExecutionEngine->addGlobalMapping(F, CG_Context::sGlobalFuncSymbols[mFuncName]);
+			return F;
+		}
+		else {
+			return NULL;
+		}
 	}
 
 	// set names for all arguments
@@ -163,7 +181,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 	CG_Context::sBuilder.SetInsertPoint(BB);
 
 	Function::arg_iterator AI = F->arg_begin();
-	for (int Idx = 0, e = funcArgTypes.size(); Idx != e; ++Idx, ++AI) {
+	for (int Idx = 0, e = mArgments.size(); Idx != e; ++Idx, ++AI) {
 		Exp_VarDef* pVarDef = dynamic_cast<Exp_VarDef*>(mExpressions[Idx]);
 		assert(pVarDef);
 		if (mArgments[Idx].isByRef) {
