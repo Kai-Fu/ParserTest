@@ -457,10 +457,10 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 	// Emit then value.
 	CG_Context::sBuilder.SetInsertPoint(pThenBB);
   
-	{
+	if (mpIfDomain) {
 		// Code gen for if block
 		CG_Context* childCtx = context->CreateChildContext(pCurFunc, context->GetFuncRetBlk(), context->GetRetValuePtr());
-		mIfDomain.GenerateCode(childCtx);
+		mpIfDomain->GenerateCode(childCtx);
 		delete childCtx;
 	}
   
@@ -472,10 +472,10 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 	pCurFunc->getBasicBlockList().push_back(pElseBB);
 	CG_Context::sBuilder.SetInsertPoint(pElseBB);
   
-	{
+	if (mpElseDomain) {
 		// Code gen for else block
 		CG_Context* childCtx = context->CreateChildContext(pCurFunc, context->GetFuncRetBlk(), context->GetRetValuePtr());
-		mElseDomain.GenerateCode(childCtx);
+		mpElseDomain->GenerateCode(childCtx);
 		delete childCtx;
 	}
   
@@ -495,5 +495,54 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
 	return NULL;
 }
 
+llvm::Value* Exp_For::GenerateCode(CG_Context* context) const
+{
+	llvm::Type* phiRetTy = SC_INT_TYPE;
+	llvm::Value* voidUndef = llvm::UndefValue::get(phiRetTy);
+
+	CG_Context* pForCtx = context->CreateChildContext(context->GetCurrentFunc(), context->GetFuncRetBlk(), context->GetRetValuePtr());
+	mStartStepCond->GetExpression(0)->GenerateCode(pForCtx);
+	// Make the new basic block for the loop header, inserting after current block.
+	llvm::Function* pCurFunc = pForCtx->GetCurrentFunc();
+	llvm::BasicBlock *PreheaderBB = CG_Context::sBuilder.GetInsertBlock();
+	llvm::BasicBlock *LoopBB = llvm::BasicBlock::Create(getGlobalContext(), "loop", pCurFunc);
+  
+	// Insert an explicit fall through from the current block to the LoopBB.
+	CG_Context::sBuilder.CreateBr(LoopBB);
+
+	// Start insertion in LoopBB.
+	CG_Context::sBuilder.SetInsertPoint(LoopBB);
+  
+	// Start the PHI node with an entry for Start.
+	PHINode *PN = CG_Context::sBuilder.CreatePHI(phiRetTy, 2);
+	PN->addIncoming(voidUndef, PreheaderBB);
+  
+	// Emit the body of the loop.  This, like any other expr, can change the
+	// current BB.  Note that we ignore the value computed by the body, but don't
+	// allow an error.
+	mForBody->GenerateCode(pForCtx);
+  
+	// Emit the step.
+	mStartStepCond->GetExpression(2)->GenerateCode(pForCtx);
+  
+	// Compute the end condition.
+	Value *contCond = mStartStepCond->GetExpression(1)->GenerateCode(pForCtx);
+	assert(contCond);
+  
+	// Create the "after loop" block and insert it.
+	BasicBlock *LoopEndBB = CG_Context::sBuilder.GetInsertBlock();
+	BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", pCurFunc);
+  
+	// Insert the conditional branch into the end of LoopEndBB.
+	CG_Context::sBuilder.CreateCondBr(contCond, LoopBB, AfterBB);
+  
+	// Any new code will be inserted in AfterBB.
+	CG_Context::sBuilder.SetInsertPoint(AfterBB);
+  
+	// Add a new entry to the PHI node for the backedge.
+	PN->addIncoming(voidUndef, LoopEndBB);
+
+	return NULL;
+}
 
 } // namespace SC

@@ -20,6 +20,7 @@ namespace SC {
 	class Exp_ValueEval;
 	class CG_Context;
 	class Exp_If;
+	class Exp_For;
 
 	enum KeyWord {
 		kStructDef,
@@ -156,6 +157,7 @@ namespace SC {
 		void AddFunctionDefExpression(Exp_FunctionDecl* exp);
 		void AddDomainExpression(CodeDomain* exp);
 		void AddIfExpression(Exp_If* exp);
+		void AddForExpression(Exp_For* exp);
 
 		bool IsTypeDefined(const std::string& typeName) const;
 		bool IsVariableDefined(const std::string& varName, bool includeParent) const;
@@ -164,7 +166,8 @@ namespace SC {
 		Exp_StructDef* GetStructDefineByName(const std::string& structName);
 		Exp_VarDef* GetVarDefExpByName(const std::string& varName) const;
 		Exp_FunctionDecl* GetFunctionDeclByName(const std::string& funcName);
-
+		int GetExpressionCnt() const;
+		Expression* GetExpression(int idx);
 	};
 
 	class Exp_VarDef : public Expression
@@ -431,8 +434,8 @@ namespace SC {
 	{
 		friend class CodeDomain;
 	private:
-		CodeDomain mIfDomain;
-		CodeDomain mElseDomain;
+		CodeDomain* mpIfDomain;
+		CodeDomain* mpElseDomain;
 		Exp_ValueEval* mpCondValue;
 	public:
 		Exp_If(CodeDomain* parent);
@@ -441,6 +444,20 @@ namespace SC {
 
 		virtual bool CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		static Exp_If* Parse(CompilingContext& context, CodeDomain* curDomain);
+	};
+
+	class Exp_For : public Expression
+	{
+	private:
+		CodeDomain* mForBody;
+		CodeDomain* mStartStepCond;
+	public:
+		Exp_For();
+		virtual ~Exp_For();
+		virtual llvm::Value* GenerateCode(CG_Context* context) const;
+
+		virtual bool CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+		static Exp_For* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
 	class RootDomain : public CodeDomain
@@ -467,7 +484,8 @@ namespace SC {
 			kAllowReturnExp		= 0x00000008,
 			kAlllowStructDef	= 0x00000010,
 			kAlllowFuncDef		= 0x00000020,
-			kAllowIfExp			= 0x00000040
+			kAllowIfExp			= 0x00000040,
+			kAllowForExp		= 0x00000080
 		};
 	private:
 		const char* mContentPtr;

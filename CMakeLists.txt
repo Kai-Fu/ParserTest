@@ -13,6 +13,7 @@ include_directories( "src" )
 add_subdirectory( src )
 add_subdirectory( test/external_function )
 add_subdirectory( test/recursive_call )
+add_subdirectory( test/for_expression )
 
 
 

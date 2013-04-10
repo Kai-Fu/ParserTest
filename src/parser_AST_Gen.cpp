@@ -973,6 +973,21 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 
 	if (endT && PeekNextToken(0).IsEqual(endT))
 		return false;
+	else if ((GetStatusCode() & kAllowForExp) && PeekNextToken(0).IsEqual("for")) {
+		Exp_For* pFor = Exp_For::Parse(*this, curDomain);
+		if (!pFor) {
+			return false;
+		}
+		Exp_ValueEval::TypeInfo outType;
+		std::string errMsg;
+		std::vector<std::string> warnMsg;
+		if (!pFor->CheckSemantic(outType, errMsg, warnMsg)) {
+			AddErrorMessage(firstT, errMsg);
+			delete pFor;
+			return false;
+		}
+		curDomain->AddForExpression(pFor);
+	}
 	else if ((GetStatusCode() & kAllowIfExp) && IsIfExpPartten()) {
 		Exp_If * pIf = Exp_If::Parse(*this, curDomain);
 		if (!pIf) {
@@ -1137,14 +1152,10 @@ bool CodeDomain::HasReturnExpForAllPaths()
 			return true;
 		Exp_If* pIfExp = dynamic_cast<Exp_If*>(mExpressions[i]);
 		if (pIfExp) {
-			if (pIfExp->mElseDomain.mExpressions.size() > 0) {
-				if (pIfExp->mIfDomain.HasReturnExpForAllPaths() && pIfExp->mElseDomain.HasReturnExpForAllPaths())
-					return true;
-			}
-			else {
-				if (pIfExp->mIfDomain.HasReturnExpForAllPaths())
-					return true;	
-			}
+			bool isEndingIf = (pIfExp->mpIfDomain && pIfExp->mpIfDomain->HasReturnExpForAllPaths());
+			bool isEndingElse = (pIfExp->mpElseDomain && pIfExp->mpElseDomain->HasReturnExpForAllPaths());
+			if (isEndingIf && isEndingElse)
+				return true;	
 		}
 	}
 	return false;
@@ -1194,6 +1205,13 @@ void CodeDomain::AddDomainExpression(CodeDomain* exp)
 }
 
 void CodeDomain::AddIfExpression(Exp_If* exp)
+{
+	if (exp) {
+		mExpressions.push_back(exp);
+	}
+}
+
+void CodeDomain::AddForExpression(Exp_For* exp)
 {
 	if (exp) {
 		mExpressions.push_back(exp);
@@ -2012,6 +2030,16 @@ Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 		return mpParentDomain ? mpParentDomain->GetFunctionDeclByName(funcName) : NULL;
 }
 
+int CodeDomain::GetExpressionCnt() const
+{
+	return mExpressions.size();
+}
+
+Expression* CodeDomain::GetExpression(int idx)
+{
+	return mExpressions[idx];
+}
+
 Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain* curDomain)
 {
 	std::auto_ptr<Exp_FunctionDecl> result(new Exp_FunctionDecl(curDomain));
@@ -2096,7 +2124,8 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 		context.mpCurrentFunc = pFuncDef;
 		context.PushStatusCode(CompilingContext::kAlllowStructDef | CompilingContext::kAllowReturnExp | 
 			CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef |
-			CompilingContext::kAllowVarInit | CompilingContext::kAllowIfExp);
+			CompilingContext::kAllowVarInit | CompilingContext::kAllowIfExp |
+			CompilingContext::kAllowForExp);
 		if (!context.ParseCodeDomain(pFuncDef, NULL))
 			ret = NULL;
 		context.PopStatusCode();
@@ -2328,16 +2357,21 @@ bool Exp_Indexer::IsAssignable(bool allowSwizzle) const
 	return GetCachedTypeInfo().assignable;
 }
 
-Exp_If::Exp_If(CodeDomain* parent) :
-	mIfDomain(parent), mElseDomain(parent)
+Exp_If::Exp_If(CodeDomain* parent)
 {
 	mpCondValue = NULL;
+	mpIfDomain = NULL;
+	mpElseDomain = NULL;
 }
 
 Exp_If::~Exp_If()
 {
 	if (mpCondValue)
 		delete mpCondValue;
+	if (mpIfDomain)
+		delete mpIfDomain;
+	if (mpElseDomain)
+		delete mpElseDomain;
 }
 
 bool Exp_If::CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
@@ -2384,15 +2418,16 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 	// Parse the if code block
 	//
 	curT = context.PeekNextToken(0);
+	result->mpIfDomain = new CodeDomain(curDomain);
 	if (curT.IsEqual("{")) {
 		context.GetNextToken();  // Eat the "{"
-		if (!context.ParseCodeDomain(&result->mIfDomain, "}")) {
+		if (!context.ParseCodeDomain(result->mpIfDomain, "}")) {
 			return NULL;
 		}
 		context.GetNextToken();  // Eat the "}"
 	}
 	else {
-		if (!context.ParseSingleExpression(&result->mIfDomain, ";")) {
+		if (!context.ParseSingleExpression(result->mpIfDomain, ";")) {
 			context.GetNextToken(); // Eat the ";"
 			context.AddErrorMessage(curT, "Invalid if expression.");
 			return NULL;
@@ -2404,23 +2439,104 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 	curT = context.PeekNextToken(0);
 	if (curT.IsEqual("else")) {
 		context.GetNextToken(); // Eat the "else"
-
+		result->mpElseDomain = new CodeDomain(curDomain);
 		curT = context.PeekNextToken(0);
 		if (curT.IsEqual("{")) {
 			context.GetNextToken();  // Eat the "{"
-			if (!context.ParseCodeDomain(&result->mElseDomain, "}")) {
+			if (!context.ParseCodeDomain(result->mpElseDomain, "}")) {
 				return NULL;
 			}
 			context.GetNextToken();  // Eat the "}"
 		}
 		else {
-			if (!context.ParseSingleExpression(&result->mElseDomain, ";")) {
+			if (!context.ParseSingleExpression(result->mpElseDomain, ";")) {
 				context.GetNextToken(); // Eat the ";"
 				context.AddErrorMessage(curT, "Invalid else expression.");
 				return NULL;
 			}
 		}
 	}
+	return result.release();
+}
+
+Exp_For::Exp_For()
+{
+	mForBody = NULL;
+	mStartStepCond = NULL;
+}
+
+Exp_For::~Exp_For()
+{
+	if (mForBody) delete mForBody;
+	if (mStartStepCond) delete mStartStepCond;
+}
+
+bool Exp_For::CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	Exp_ValueEval::TypeInfo contCondType;
+	Exp_ValueEval* pValueExp = dynamic_cast<Exp_ValueEval*>(mStartStepCond->GetExpression(1));
+	if (!pValueExp || !pValueExp->CheckSemantic(contCondType, errMsg, warnMsg))
+		return false;
+	if (contCondType.type != VarType::kBoolean) {
+		errMsg = "The for ending condition must be boolean value";
+		return false;
+	}
+	return true;
+}
+
+Exp_For* Exp_For::Parse(CompilingContext& context, CodeDomain* curDomain)
+{
+	Token curT = context.GetNextToken();
+	if (!curT.IsEqual("for"))
+		return NULL;
+	curT = context.GetNextToken();
+	if (!curT.IsEqual("("))
+		return NULL;
+	std::auto_ptr<Exp_For> result(new Exp_For());
+	result->mStartStepCond = new CodeDomain(curDomain);
+	// Parse start expression
+	if (!context.ParseSingleExpression(result->mStartStepCond, ";")) 
+		return NULL;
+	assert(result->mStartStepCond->GetExpressionCnt() == 1);
+	
+	curT = context.PeekNextToken(0);
+	// Parse continuing condition expression
+	Exp_ValueEval* condValue = context.ParseComplexExpression(result->mStartStepCond, ";");
+	if (condValue == NULL) {
+		context.AddErrorMessage(curT, "Invalid for condition expression.");
+		return NULL;
+	}
+	context.GetNextToken(); // Eat the ending ";"
+	result->mStartStepCond->AddValueExpression(condValue);
+	assert(result->mStartStepCond->GetExpressionCnt() == 2);
+
+	curT = context.PeekNextToken(0);
+	// Parse step expression
+	Exp_ValueEval* stepValue = context.ParseComplexExpression(result->mStartStepCond, ")");
+	if (stepValue == NULL) {
+		context.AddErrorMessage(curT, "Invalid for step expression.");
+		return NULL;
+	}
+	context.GetNextToken(); // Eat the ending ";"
+	result->mStartStepCond->AddValueExpression(stepValue);
+	assert(result->mStartStepCond->GetExpressionCnt() == 3);
+
+	result->mForBody = new CodeDomain(result->mStartStepCond);
+	if (curT.IsEqual("{")) {
+		context.GetNextToken();  // Eat the "{"
+		if (!context.ParseCodeDomain(result->mForBody, "}")) {
+			return NULL;
+		}
+		context.GetNextToken();  // Eat the "}"
+	}
+	else {
+		if (!context.ParseSingleExpression(result->mForBody, ";")) {
+			context.GetNextToken(); // Eat the ";"
+			context.AddErrorMessage(curT, "Invalid for body expression.");
+			return NULL;
+		}
+	}
+
 	return result.release();
 }
 
