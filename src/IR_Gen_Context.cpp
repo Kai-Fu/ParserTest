@@ -265,6 +265,11 @@ llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, VarType srcType, V
 		//
 		// For scalar types
 		//
+		if (srcType == VarType::kBoolean && destType == VarType::kBoolean) {
+			llvm::Value* falseValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			llvm::Value* trueValue = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)1));
+			return sBuilder.CreateSelect(srcValue, trueValue, falseValue);
+		}
 
 		if (srcIorF != destIorF) {
 			if (destIorF)
