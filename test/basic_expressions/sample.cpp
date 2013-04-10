@@ -37,14 +37,15 @@ int main(int argc, char* argv[])
 		return -1;
 	else {
 		content[totalLen] = '\0';
-		const char* funcNames[2];
-		void* funcPtrs[2];
+		const char* funcNames[3];
+		void* funcPtrs[3];
 
 		funcNames[0] = "TestBooleanValues";
 		funcNames[1] = "DotProduct";
+		funcNames[2] = "TestSwizzle";
 
 
-		if (!KSC_Compile(content, funcNames, 2, funcPtrs)) {
+		if (!KSC_Compile(content, funcNames, 3, funcPtrs)) {
 			printf(KSC_GetLastErrorMsg());
 			return -1;
 		}
@@ -54,12 +55,22 @@ int main(int argc, char* argv[])
 		int result = TestBooleanValues();
 		printf("result is %d\n", result);
 
-		typedef float (*PFN_DotProduct)(float* l, float* r);
-		PFN_DotProduct DotProduct = (PFN_DotProduct)funcPtrs[1];
-		float ll[3] = {0.7f, 0.6f, 0.3f};
-		float rr[3] = {0.2f, 0.8f, 0.13f};
-		float fResult = DotProduct(ll, rr);
-		printf("result is %f\n", fResult);
+		{
+			typedef float (*PFN_DotProduct)(float* l, float* r);
+			PFN_DotProduct DotProduct = (PFN_DotProduct)funcPtrs[1];
+			float ll[3] = {0.7f, 0.6f, 0.3f};
+			float rr[3] = {0.2f, 0.8f, 0.13f};
+			float fResult = DotProduct(ll, rr);
+			printf("result is %f\n", fResult);
+		}
+
+		{
+			typedef float (*PFN_TestSwizzle)(float* l);
+			PFN_TestSwizzle TestSwizzle = (PFN_TestSwizzle)funcPtrs[2];
+			float ll[3] = {0.7f, 0.6f, 0.3f};
+			float fResult = TestSwizzle(ll);
+			printf("result is %f\n", fResult);
+		}
 	}
 	
 
