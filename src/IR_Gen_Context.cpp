@@ -61,19 +61,33 @@ CG_Context::CG_Context()
 {
 	mpParent = NULL;
 	mpCurFunction = NULL;
+	mpCurFuncRetBlk = NULL;
+	mpRetValuePtr = NULL;
 }
 
-CG_Context* CG_Context::CreateChildContext(Function* pCurFunc)
+CG_Context* CG_Context::CreateChildContext(Function* pCurFunc, llvm::BasicBlock* pRetBlk, llvm::Value* pRetValuePtr)
 {
 	CG_Context* pRet = new CG_Context();
 	pRet->mpParent = this;
 	pRet->mpCurFunction = pCurFunc;
+	pRet->mpCurFuncRetBlk = pRetBlk;
+	pRet->mpRetValuePtr = pRetValuePtr;
 	return pRet;
 }
 
 Function* CG_Context::GetCurrentFunc()
 {
 	return mpCurFunction;
+}
+
+llvm::BasicBlock* CG_Context::GetFuncRetBlk()
+{
+	return mpCurFuncRetBlk;
+}
+
+llvm::Value* CG_Context::GetRetValuePtr()
+{
+	return mpRetValuePtr;
 }
 
 llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)

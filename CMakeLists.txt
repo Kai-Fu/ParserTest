@@ -12,6 +12,7 @@ include_directories( "src" )
 # Add the KSC modules
 add_subdirectory( src )
 add_subdirectory( test/external_function )
+add_subdirectory( test/recursive_call )
 
 
 

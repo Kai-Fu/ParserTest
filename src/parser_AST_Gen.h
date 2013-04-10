@@ -429,6 +429,7 @@ namespace SC {
 
 	class Exp_If : public Expression
 	{
+		friend class CodeDomain;
 	private:
 		CodeDomain mIfDomain;
 		CodeDomain mElseDomain;
@@ -480,6 +481,8 @@ namespace SC {
 
 		RootDomain* mRootCodeDomain;
 		std::list<int> mStatusCode;
+	public:
+		Exp_FunctionDecl* mpCurrentFunc;
 
 	private:
 		bool IsVarDefinePartten(bool allowInit);

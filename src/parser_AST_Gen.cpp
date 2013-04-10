@@ -376,6 +376,7 @@ CompilingContext::CompilingContext(const char* content)
 	mContentPtr = content;
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 0;
+	mpCurrentFunc = NULL;
 	mRootCodeDomain = new RootDomain();
 }
 
@@ -1015,7 +1016,7 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		if (PeekNextToken(0).IsEqual("return")) {
 			GetNextToken(); // Eat the "return"
 
-			Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(curDomain->GetParent());
+			Exp_FunctionDecl* pFuncDecl = mpCurrentFunc;
 			assert(pFuncDecl); // return expression should be only allowed in function body.
 			Exp_ValueEval* pValue = NULL;
 			if (!PeekNextToken(0).IsEqual(";")) {
@@ -1134,6 +1135,17 @@ bool CodeDomain::HasReturnExpForAllPaths()
 		CodeDomain* childDomain = dynamic_cast<CodeDomain*>(mExpressions[i]);
 		if (childDomain && childDomain->HasReturnExpForAllPaths())
 			return true;
+		Exp_If* pIfExp = dynamic_cast<Exp_If*>(mExpressions[i]);
+		if (pIfExp) {
+			if (pIfExp->mElseDomain.mExpressions.size() > 0) {
+				if (pIfExp->mIfDomain.HasReturnExpForAllPaths() && pIfExp->mElseDomain.HasReturnExpForAllPaths())
+					return true;
+			}
+			else {
+				if (pIfExp->mIfDomain.HasReturnExpForAllPaths())
+					return true;	
+			}
+		}
 	}
 	return false;
 }
@@ -2080,18 +2092,24 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 		}
 
 		// Now parse the function body
+		assert(context.mpCurrentFunc == NULL);
+		context.mpCurrentFunc = pFuncDef;
 		context.PushStatusCode(CompilingContext::kAlllowStructDef | CompilingContext::kAllowReturnExp | 
 			CompilingContext::kAllowValueExp | CompilingContext::kAllowVarDef |
 			CompilingContext::kAllowVarInit | CompilingContext::kAllowIfExp);
 		if (!context.ParseCodeDomain(pFuncDef, NULL))
 			ret = NULL;
 		context.PopStatusCode();
+		context.mpCurrentFunc = NULL;
+		if (!ret)
+			return NULL; // Bad function body
 
 		// If this function returns a value except void type, check if all the code paths have return expressions.
 		if (pFuncDef->mReturnType != VarType::kVoid) {
 			if (!pFuncDef->HasReturnExpForAllPaths()) {
 				context.AddErrorMessage(funcNameT, "Not all path has the return value.");
 				ret = NULL;
+				return NULL;
 			}
 		}
 		ret->mHasBody = true;

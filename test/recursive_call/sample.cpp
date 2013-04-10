@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
 	KSC_Initialize();
 
 	FILE* f = NULL;
-	fopen_s(&f, "exntern_function.ls", "r");
+	fopen_s(&f, "recursive_call.ls", "r");
 	if (f == NULL)
 		return -1;
 	fseek(f, 0, SEEK_END);
@@ -40,8 +40,7 @@ int main(int argc, char* argv[])
 		const char* funcNames[1];
 		void* funcPtrs[1];
 
-		funcNames[0] = "HandleArray";
-		KSC_AddExternalFunction("SimpleCallee", SimpleCallee);
+		funcNames[0] = "factorial";
 
 
 		if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
@@ -49,13 +48,10 @@ int main(int argc, char* argv[])
 			return -1;
 		}
 
-		struct ArrayCntr {
-			float abc;
-			float my_array[13];
-		};
-		ArrayCntr array_ref;
-		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))funcPtrs[0];
-		HandleArray(&array_ref);
+		typedef int (*PFN_factorial)(int arg);
+		PFN_factorial factorial = (PFN_factorial)funcPtrs[0];
+		int result = factorial(9);
+		printf("result is %d\n", result);
 	}
 	
 

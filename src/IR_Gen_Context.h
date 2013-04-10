@@ -34,7 +34,10 @@ class CG_Context
 {
 private:
 	CG_Context* mpParent;
-	Function* mpCurFunction;
+	llvm::Function* mpCurFunction;
+	llvm::BasicBlock* mpCurFuncRetBlk;
+	llvm::Value* mpRetValuePtr;
+
 	std::hash_map<std::string, llvm::Value*> mVariables;
 	std::hash_map<std::string, llvm::Function*> mFuncDecls;
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
@@ -49,7 +52,9 @@ public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
 
 	CG_Context();
-	Function* GetCurrentFunc();
+	llvm::Function* GetCurrentFunc();
+	llvm::BasicBlock* GetFuncRetBlk();
+	llvm::Value* GetRetValuePtr();
 
 	llvm::Value* GetVariableValue(const std::string& name, bool includeParent);
 	llvm::Value* GetVariablePtr(const std::string& name, bool includeParent);
@@ -58,7 +63,7 @@ public:
 	llvm::Type* NewStructType(const Exp_StructDef* pStructDef);
 	void AddFunctionDecl(const std::string& funcName, llvm::Function* pF);
 	llvm::Function* GetFuncDeclByName(const std::string& funcName);
-	CG_Context* CreateChildContext(Function* pCurFunc);
+	CG_Context* CreateChildContext(Function* pCurFunc, llvm::BasicBlock* pRetBlk, llvm::Value* pRetValuePtr);
 
 	llvm::Value* CastValueType(llvm::Value* srcValue, VarType srcType, VarType destType);
 

@@ -121,6 +121,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 {
 	// handle the argument types
 	Function *F = context->GetFuncDeclByName(mFuncName);
+	llvm::Type* retType = NULL;
 	if (!F) {
 		std::vector<llvm::Type*> funcArgTypes(mArgments.size());
 		for (int i = 0; i < (int)mArgments.size(); ++i) {
@@ -138,8 +139,8 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 				funcArgTypes[i] =  llvm::PointerType::get(funcArgTypes[i], 0);
 	
 		}
+
 		// handle the return type
-		llvm::Type* retType = NULL;
 		if (mReturnType == VarType::kStructure) {
 			retType = context->GetStructType(mpRetStruct);
 		}
@@ -174,11 +175,16 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 		for (Function::arg_iterator AI = F->arg_begin(); Idx != mArgments.size(); ++AI, ++Idx) 
 			AI->setName(mArgments[Idx].token.ToStdString());
 	}
-
-	CG_Context* funcGC_ctx = context->CreateChildContext(F);
+	
 	// Create a new basic block to start insertion into, this basic blokc is a must for a function.
 	BasicBlock *BB = BasicBlock::Create(getGlobalContext(), mFuncName + "_entry", F);
+
+	// Create the basic block for exiting code which handles the return value, it will be inserted into function body later.
+	BasicBlock *retBB = BasicBlock::Create(getGlobalContext(), mFuncName + "_exit");
+	
 	CG_Context::sBuilder.SetInsertPoint(BB);
+	llvm::Value* pRetValuePtr = CG_Context::sBuilder.CreateAlloca(retType, 0, mFuncName + "_retValue");
+	CG_Context* funcGC_ctx = context->CreateChildContext(F, retBB, pRetValuePtr);
 
 	Function::arg_iterator AI = F->arg_begin();
 	for (int Idx = 0, e = mArgments.size(); Idx != e; ++Idx, ++AI) {
@@ -200,13 +206,25 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 	assert(pFuncBody);
 	pFuncBody->GenerateCode(funcGC_ctx);
 
+	// Now insert the exit basic block
+	F->getBasicBlockList().push_back(retBB);
+	CG_Context::sBuilder.CreateBr(retBB);
+
+	assert(retType);
+	CG_Context::sBuilder.SetInsertPoint(retBB);
+	if (mReturnType == VarType::kVoid)
+		return CG_Context::sBuilder.CreateRetVoid();
+	else
+		CG_Context::sBuilder.CreateRet(CG_Context::sBuilder.CreateLoad(pRetValuePtr));
+
+
 	delete funcGC_ctx;
 	return F;
 }
 
 llvm::Value* CodeDomain::GenerateCode(CG_Context* context) const
 {
-	CG_Context* domain_ctx = context->CreateChildContext(context->GetCurrentFunc());
+	CG_Context* domain_ctx = context->CreateChildContext(context->GetCurrentFunc(), context->GetFuncRetBlk(), context->GetRetValuePtr());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
 		mExpressions[i]->GenerateCode(domain_ctx);
 	}
@@ -219,10 +237,9 @@ llvm::Value* Exp_FuncRet::GenerateCode(CG_Context* context) const
 	if (mpRetValue) {
 		llvm::Value* retVal = mpRetValue->GenerateCode(context);
 		assert(retVal);
-		return CG_Context::sBuilder.CreateRet(retVal);
+		return CG_Context::sBuilder.CreateStore(retVal, context->GetRetValuePtr());
 	}
-	else
-		return CG_Context::sBuilder.CreateRetVoid();
+	return NULL;
 }
 
 void Exp_DotOp::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) const
@@ -442,7 +459,7 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
   
 	{
 		// Code gen for if block
-		CG_Context* childCtx = context->CreateChildContext(pCurFunc);
+		CG_Context* childCtx = context->CreateChildContext(pCurFunc, context->GetFuncRetBlk(), context->GetRetValuePtr());
 		mIfDomain.GenerateCode(childCtx);
 		delete childCtx;
 	}
@@ -457,8 +474,8 @@ llvm::Value* Exp_If::GenerateCode(CG_Context* context) const
   
 	{
 		// Code gen for else block
-		CG_Context* childCtx = context->CreateChildContext(pCurFunc);
-		mElseDomain.GenerateCode(context->CreateChildContext(pCurFunc));
+		CG_Context* childCtx = context->CreateChildContext(pCurFunc, context->GetFuncRetBlk(), context->GetRetValuePtr());
+		mElseDomain.GenerateCode(childCtx);
 		delete childCtx;
 	}
   
