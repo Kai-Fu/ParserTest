@@ -2292,8 +2292,18 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 			return false;
 		}
 		bool FtoI = false;
-		if (!pArgDesc->typeInfo.IsTypeCompatible(argTypeInfo, FtoI))
-			return false;
+		if (pArgDesc->isByRef) {
+			if (!pArgDesc->typeInfo.IsSameType(argTypeInfo)) {
+				errMsg = "Reference argument must recieve the value of the same type.";
+				return false;
+			}
+		}
+		else {
+			if (!pArgDesc->typeInfo.IsTypeCompatible(argTypeInfo, FtoI)) {
+				errMsg = "Cannot perform implicity type conversion for argument.";
+				return false;
+			}
+		}
 		if (FtoI)
 			warnMsg.push_back("Implicit float to int conversion.");
 	}
