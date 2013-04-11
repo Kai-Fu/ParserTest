@@ -15,6 +15,7 @@ add_subdirectory( test/external_function )
 add_subdirectory( test/recursive_call )
 add_subdirectory( test/for_expression )
 add_subdirectory( test/basic_expressions )
+add_subdirectory( test/generic_tests )
 
 
 

@@ -158,6 +158,9 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 		return NULL;
 	}
 
+	if (CG_Context::IsIntrinsicFunc(mFuncName))
+		return F;
+
 	if (!mHasBody) {
 		// Function doens't have the body, so it must be an external function.
 		if (CG_Context::sGlobalFuncSymbols.find(mFuncName) != CG_Context::sGlobalFuncSymbols.end()) {
@@ -421,21 +424,32 @@ void Exp_Indexer::GenerateAssignCode(CG_Context* context, llvm::Value* pValue) c
 
 llvm::Value* Exp_FunctionCall::GenerateCode(CG_Context* context) const
 {
-	llvm::Function* pF = context->GetFuncDeclByName(mpFuncDef->GetFunctionName());
-	assert(pF);
-	std::vector<llvm::Value*> args;
-	for (int i = 0; i < (int)mInputArgs.size(); ++i) {
-		if (mpFuncDef->GetArgumentDesc(i)->isByRef) {
-			Exp_ValueEval::ValuePtrInfo argPtrInfo = mInputArgs[i]->GetValuePtr(context);
-			assert(argPtrInfo.valuePtr != NULL && argPtrInfo.belongToVector == false);
-			args.push_back(argPtrInfo.valuePtr);
-		}
-		else {
+	if (!mpFuncDef->HasBody() && CG_Context::IsIntrinsicFunc(mpFuncDef->GetFunctionName())) {
+		std::vector<llvm::Value*> args;
+		for (int i = 0; i < (int)mInputArgs.size(); ++i) {
 			llvm::Value* argValue = mInputArgs[i]->GenerateCode(context);
 			args.push_back(argValue);
 		}
+		return CG_Context::CreateIntrinsicCall(mpFuncDef->GetFunctionName(), args);
 	}
-	return CG_Context::sBuilder.CreateCall(pF, args);
+	else {
+		llvm::Function* pF = context->GetFuncDeclByName(mpFuncDef->GetFunctionName());
+		assert(pF);
+		std::vector<llvm::Value*> args;
+		for (int i = 0; i < (int)mInputArgs.size(); ++i) {
+			if (mpFuncDef->GetArgumentDesc(i)->isByRef) {
+				Exp_ValueEval::ValuePtrInfo argPtrInfo = mInputArgs[i]->GetValuePtr(context);
+				assert(argPtrInfo.valuePtr != NULL && argPtrInfo.belongToVector == false);
+				args.push_back(argPtrInfo.valuePtr);
+			}
+			else {
+				llvm::Value* argValue = mInputArgs[i]->GenerateCode(context);
+				argValue = context->CastValueType(argValue, mInputArgs[i]->GetCachedTypeInfo().type, mpFuncDef->GetArgumentDesc(i)->typeInfo.type);
+				args.push_back(argValue);
+			}
+		}
+		return CG_Context::sBuilder.CreateCall(pF, args);
+		}
 }
 
 

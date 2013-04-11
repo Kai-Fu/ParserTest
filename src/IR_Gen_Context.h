@@ -14,6 +14,7 @@
 #include <llvm/DataLayout.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Intrinsics.h>
 
 using namespace llvm;
 
@@ -41,15 +42,20 @@ private:
 	std::hash_map<std::string, llvm::Value*> mVariables;
 	std::hash_map<std::string, llvm::Function*> mFuncDecls;
 	std::hash_map<const Exp_StructDef*, llvm::Type*> mStructTypes;
+	
 public:
 	static llvm::Module *TheModule;
 	static llvm::ExecutionEngine* TheExecutionEngine;
 	static llvm::FunctionPassManager* TheFPM;
 	static llvm::IRBuilder<> sBuilder;
 	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
+	static std::hash_map<std::string, llvm::Intrinsic::ID> mIntrinsicFuncs;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
+
+	static bool IsIntrinsicFunc(const std::string& funcName);
+	static llvm::Value* CreateIntrinsicCall(const std::string& funcName, std::vector<llvm::Value*>& values);
 
 	CG_Context();
 	llvm::Function* GetCurrentFunc();

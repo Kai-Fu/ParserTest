@@ -3,6 +3,7 @@
 #include <vector>
 #include <list>
 #include <hash_map>
+#include <set>
 #include "parser_defines.h"
 
 #define WANT_MEM_LEAK_CHECK
@@ -119,7 +120,7 @@ namespace SC {
 		virtual llvm::Value* GenerateCode(CG_Context* context) const;
 
 #ifdef WANT_MEM_LEAK_CHECK
-		static int s_expnCnt;
+		static std::set<Expression*> s_instances;
 #endif
 	};
 	

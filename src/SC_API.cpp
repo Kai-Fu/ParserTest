@@ -9,7 +9,22 @@ static std::string			s_lastErrMsg;
 bool KSC_Initialize()
 {
 	SC::Initialize_AST_Gen();
-	return SC::InitializeCodeGen();
+	bool ret = SC::InitializeCodeGen();
+	
+	const char* intrinsicFuncDecal = 
+		"float sin(float arg);\n"
+		"float cos(float arg);\n"
+		"float pow(float base, float exp);\n"
+		"int ipow(int base, int exp);\n"
+		"float sqrt(float arg);\n"
+		"float fabs(float arg);\n";
+
+	if (ret) {
+		KSC_Compile(intrinsicFuncDecal, NULL, 0, NULL);
+		return true;
+	}
+	else
+		return false;
 }
 
 

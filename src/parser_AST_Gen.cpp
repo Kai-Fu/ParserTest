@@ -385,7 +385,7 @@ CompilingContext::~CompilingContext()
 	if (mRootCodeDomain)
 		delete mRootCodeDomain;
 #ifdef WANT_MEM_LEAK_CHECK
-	assert(SC::Expression::s_expnCnt == 0);
+	assert(SC::Expression::s_instances.size() == 0);
 #endif
 }
 
@@ -1522,8 +1522,8 @@ Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 
 Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken0, const char* pEndToken1)
 {
-	Exp_ValueEval* simpleExp0 = ParseSimpleExpression(curDomain);
-	if (!simpleExp0) {
+	std::auto_ptr<Exp_ValueEval> simpleExp0(ParseSimpleExpression(curDomain));
+	if (!simpleExp0.get()) {
 		// Must have some error message if it failed to parse a simple expression
 		assert(!mErrorMessages.empty()); 
 		return NULL;
@@ -1532,7 +1532,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 	Exp_ValueEval* ret = NULL;
 	Token curT = PeekNextToken(0);
 	if (curT.IsEqual(pEndToken0) || curT.IsEqual(pEndToken1)) {
-		ret = simpleExp0;
+		ret = simpleExp0.release();
 	}
 	else {
 		if (curT.GetType() != Token::kBinaryOp) {
@@ -1544,8 +1544,8 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 		int op0_level = curT.GetBinaryOpLevel();
 		std::string op0_str = curT.ToStdString();
 
-		Exp_ValueEval* simpleExp1 = ParseSimpleExpression(curDomain);
-		if (!simpleExp1) {
+		std::auto_ptr<Exp_ValueEval> simpleExp1(ParseSimpleExpression(curDomain));
+		if (!simpleExp1.get()) {
 			// Must have some error message if it failed to parse a simple expression
 			assert(!mErrorMessages.empty()); 
 			return NULL;
@@ -1555,7 +1555,7 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 		// Get the next token to decide if the next binary operator is in high level of priority
 		if (nextT.IsEqual(pEndToken0) || nextT.IsEqual(pEndToken1)) {
 			// we are done for this complex value expression, return it.
-			Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
+			Exp_BinaryOp* pBinaryOp = new Exp_BinaryOp(op0_str, simpleExp0.release(), simpleExp1.release());
 			ret = pBinaryOp;
 		}
 		else if (nextT.GetType() == Token::kBinaryOp) {
@@ -1567,15 +1567,15 @@ Exp_ValueEval* CompilingContext::ParseComplexExpression(CodeDomain* curDomain, c
 			if (op1_level > op0_level) {
 				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken0, pEndToken1);
 				if (simpleExp2) {
-					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1, simpleExp2);
-					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, pBinaryOp1);
+					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, simpleExp1.release(), simpleExp2);
+					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0.release(), pBinaryOp1);
 					ret = pBinaryOp0;
 				}
 			}
 			else {
 				Exp_ValueEval* simpleExp2 = ParseComplexExpression(curDomain, pEndToken0, pEndToken1);
 				if (simpleExp2) {
-					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0, simpleExp1);
+					Exp_BinaryOp* pBinaryOp0 = new Exp_BinaryOp(op0_str, simpleExp0.release(), simpleExp1.release());
 					Exp_BinaryOp* pBinaryOp1 = new Exp_BinaryOp(op1_str, pBinaryOp0, simpleExp2);
 					ret = pBinaryOp1;
 				}
@@ -2428,7 +2428,6 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 	}
 	else {
 		if (!context.ParseSingleExpression(result->mpIfDomain, ";")) {
-			context.GetNextToken(); // Eat the ";"
 			context.AddErrorMessage(curT, "Invalid if expression.");
 			return NULL;
 		}
@@ -2450,7 +2449,6 @@ Exp_If* Exp_If::Parse(CompilingContext& context, CodeDomain* curDomain)
 		}
 		else {
 			if (!context.ParseSingleExpression(result->mpElseDomain, ";")) {
-				context.GetNextToken(); // Eat the ";"
 				context.AddErrorMessage(curT, "Invalid else expression.");
 				return NULL;
 			}
@@ -2541,15 +2539,15 @@ Exp_For* Exp_For::Parse(CompilingContext& context, CodeDomain* curDomain)
 }
 
 #ifdef WANT_MEM_LEAK_CHECK
-int Expression::s_expnCnt = 0;
+std::set<Expression*> Expression::s_instances;
 Expression::Expression()
 {
-	++s_expnCnt;
+	s_instances.insert(this);
 }
 
 Expression::~Expression()
 {
-	--s_expnCnt;
+	s_instances.erase(this);
 }
 
 #else
