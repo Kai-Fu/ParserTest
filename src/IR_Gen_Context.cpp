@@ -7,7 +7,6 @@ llvm::Module* CG_Context::TheModule = NULL;
 llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
 llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
 std::hash_map<std::string, void*> CG_Context::sGlobalFuncSymbols;
-std::hash_map<std::string, llvm::Intrinsic::ID> CG_Context::mIntrinsicFuncs;
 
 bool InitializeCodeGen()
 {
@@ -46,13 +45,6 @@ bool InitializeCodeGen()
 	// the sybmoll searching(e.g. for standard CRT) is disabled
 	CG_Context::TheExecutionEngine->DisableSymbolSearching(true);
 
-	CG_Context::mIntrinsicFuncs["sin"] = llvm::Intrinsic::sin;
-	CG_Context::mIntrinsicFuncs["cos"] = llvm::Intrinsic::cos;
-	CG_Context::mIntrinsicFuncs["pow"] = llvm::Intrinsic::pow;
-	CG_Context::mIntrinsicFuncs["ipow"] = llvm::Intrinsic::powi;
-	CG_Context::mIntrinsicFuncs["sqrt"] = llvm::Intrinsic::sqrt;
-	CG_Context::mIntrinsicFuncs["fabs"] = llvm::Intrinsic::fabs;
-
 
 	return true;
 }
@@ -62,24 +54,6 @@ void DestoryCodeGen()
 	delete CG_Context::TheFPM;
 	delete CG_Context::TheExecutionEngine;
 	delete CG_Context::TheModule;
-}
-
-bool CG_Context::IsIntrinsicFunc(const std::string& funcName)
-{
-	return CG_Context::mIntrinsicFuncs.find(funcName) != CG_Context::mIntrinsicFuncs.end();
-}
-
-llvm::Value* CG_Context::CreateIntrinsicCall(const std::string& funcName, std::vector<llvm::Value*>& values)
-{
-	if (IsIntrinsicFunc(funcName)) {
-		std::vector<llvm::Type*> arg_type;
-		for (int i = 0; i < (int)values.size(); ++i)
-			arg_type.push_back(values[i]->getType());
-		llvm::Function* pFunc =  Intrinsic::getDeclaration(TheModule, mIntrinsicFuncs[funcName], arg_type);
-		return sBuilder.CreateCall(pFunc, values);
-	}
-	else
-		return NULL;
 }
 
 
@@ -251,18 +225,16 @@ llvm::Function* CG_Context::GetFuncDeclByName(const std::string& funcName)
 		return mpParent ? mpParent->GetFuncDeclByName(funcName) : NULL;
 }
 
-bool RootDomain::JIT_Compile()
+bool RootDomain::JIT_Compile(CG_Context* pPredefine)
 {
-	CG_Context* cgCtx = new CG_Context();
+	CG_Context* cgCtx = pPredefine->CreateChildContext(pPredefine->GetCurrentFunc(), pPredefine->GetFuncRetBlk(), pPredefine->GetRetValuePtr());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
 		llvm::Value* value = mExpressions[i]->GenerateCode(cgCtx);
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
-			llvm::verifyFunction(*funcValue, llvm::PrintMessageAction);
 
-			void *funcPtr = CG_Context::TheExecutionEngine->getPointerToFunction(funcValue);
-			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcPtr;
+			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcValue;
 		}
 	}
 	delete cgCtx;
@@ -272,9 +244,13 @@ bool RootDomain::JIT_Compile()
 
 void* RootDomain::GetFuncPtrByName(const std::string& funcName)
 {
-	std::hash_map<std::string, void*>::iterator it = mJITedFuncPtr.find(funcName);
-	if (it != mJITedFuncPtr.end())
-		return it->second;
+	std::hash_map<std::string, llvm::Function*>::iterator it = mJITedFuncPtr.find(funcName);
+	if (it != mJITedFuncPtr.end()) {
+		if (!llvm::verifyFunction(*it->second, llvm::PrintMessageAction))
+			return CG_Context::TheExecutionEngine->getPointerToFunction(it->second);
+		else
+			return NULL;
+	}
 	else
 		return NULL;
 }

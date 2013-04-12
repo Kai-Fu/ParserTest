@@ -377,19 +377,14 @@ CompilingContext::CompilingContext(const char* content)
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 0;
 	mpCurrentFunc = NULL;
-	mRootCodeDomain = new RootDomain();
 }
 
 CompilingContext::~CompilingContext()
 {
-	if (mRootCodeDomain)
-		delete mRootCodeDomain;
-#ifdef WANT_MEM_LEAK_CHECK
-	assert(SC::Expression::s_instances.size() == 0);
-#endif
+
 }
 
-bool CompilingContext::Parse(const char* content)
+RootDomain* CompilingContext::Parse(const char* content, CodeDomain* pRefDomain)
 {
 	mBufferedToken.clear();
 	mErrorMessages.clear();
@@ -397,14 +392,17 @@ bool CompilingContext::Parse(const char* content)
 	mCurParsingPtr = mContentPtr;
 	mCurParsingLOC = 1;
 
-	if (mRootCodeDomain)
-		delete mRootCodeDomain;
-
 	PushStatusCode(kAlllowStructDef | kAlllowFuncDef);
-	mRootCodeDomain = new RootDomain();
-	while (ParseSingleExpression(mRootCodeDomain, NULL));
+	RootDomain* rootDomain = new RootDomain(pRefDomain);
+	while (ParseSingleExpression(rootDomain, NULL));
 
-	return IsEOF() && mErrorMessages.empty();
+	if (IsEOF() && mErrorMessages.empty()) {
+		return rootDomain;
+	}
+	else {
+		delete rootDomain;
+		return NULL;
+	}
 }
 
 Token CompilingContext::GetNextToken()
@@ -1331,8 +1329,8 @@ int Exp_VarDef::GetArrayCnt() const
 	return mArrayCnt;
 }
 
-RootDomain::RootDomain() :
-	CodeDomain(NULL)
+RootDomain::RootDomain(CodeDomain* pRefDomain) :
+	CodeDomain(pRefDomain)
 {
 
 }
@@ -2313,15 +2311,6 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 	return true;
 }
 
-bool CompilingContext::JIT_Compile()
-{
-	return mRootCodeDomain->JIT_Compile();
-}
-
-void* CompilingContext::GetJITedFuncPtr(const std::string& funcName)
-{
-	return mRootCodeDomain->GetFuncPtrByName(funcName);
-}
 
 Exp_Indexer::Exp_Indexer(Exp_ValueEval* pExp, Exp_ValueEval* pIndex)
 {

@@ -8,7 +8,7 @@
 void CompareTwoInt(int a, int b)
 {
 	int ret = a - b;
-	printf("test value is %d", ret);
+	printf("test value is %d (%d, %d)", ret, a, b);
 }
 
 

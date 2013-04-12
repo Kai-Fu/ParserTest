@@ -10,6 +10,7 @@
 
 namespace llvm {
 	class Value;
+	class Function;
 }
 
 namespace SC {
@@ -464,12 +465,12 @@ namespace SC {
 	class RootDomain : public CodeDomain
 	{
 	private:
-		std::hash_map<std::string, void*> mJITedFuncPtr;
+		std::hash_map<std::string, llvm::Function*> mJITedFuncPtr;
 	public:
-		RootDomain();
+		RootDomain(CodeDomain* pRefDomain);
 		virtual ~RootDomain();
 
-		bool JIT_Compile();
+		bool JIT_Compile(CG_Context* pPredefine);
 		void* GetFuncPtrByName(const std::string& funcName);
 	};
 
@@ -498,7 +499,6 @@ namespace SC {
 		std::list<std::pair<Token, std::string> > mErrorMessages;
 		std::list<std::pair<Token, std::string> > mWarningMessages;
 
-		RootDomain* mRootCodeDomain;
 		std::list<int> mStatusCode;
 	public:
 		Exp_FunctionDecl* mpCurrentFunc;
@@ -527,7 +527,7 @@ namespace SC {
 		bool ExpectAndEat(const char* str);
 		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, const Exp_StructDef*& outStructDef);
 
-		bool Parse(const char* content);
+		RootDomain* Parse(const char* content, CodeDomain* pRefDomain);
 
 		void PushStatusCode(int code);
 		int GetStatusCode();
@@ -542,9 +542,6 @@ namespace SC {
 		// Complex expression means it contains any simple expression and binary operation.
 		//
 		Exp_ValueEval* ParseComplexExpression(CodeDomain* curDomain, const char* pEndToken0, const char* pEndToken1 = NULL);
-
-		bool JIT_Compile();
-		void* GetJITedFuncPtr(const std::string& funcName);
 
 	};
 

@@ -49,13 +49,9 @@ public:
 	static llvm::FunctionPassManager* TheFPM;
 	static llvm::IRBuilder<> sBuilder;
 	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
-	static std::hash_map<std::string, llvm::Intrinsic::ID> mIntrinsicFuncs;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
-
-	static bool IsIntrinsicFunc(const std::string& funcName);
-	static llvm::Value* CreateIntrinsicCall(const std::string& funcName, std::vector<llvm::Value*>& values);
 
 	CG_Context();
 	llvm::Function* GetCurrentFunc();
