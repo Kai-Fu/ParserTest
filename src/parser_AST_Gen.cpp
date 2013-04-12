@@ -41,6 +41,7 @@ void Initialize_AST_Gen()
 	s_KeyWords["return"] = kFor;
 	s_KeyWords["true"] = kTrue;
 	s_KeyWords["false"] = kFalse;
+	s_KeyWords["extern"] = kFalse;
 }
 
 void Finish_AST_Gen()
@@ -714,10 +715,6 @@ bool CompilingContext::IsStructDefinePartten()
 bool CompilingContext::IsFunctionDefinePartten()
 {
 	int idx = 0;
-	if (PeekNextToken(0).IsEqual("extern")) {
-		++idx;
-	}
-
 	Token t0 = PeekNextToken(idx++);
 	Token t1 = PeekNextToken(idx++);
 	Token t2 = PeekNextToken(idx++);
@@ -735,6 +732,18 @@ bool CompilingContext::IsFunctionDefinePartten()
 		return false;
 
 	return true;
+}
+
+bool CompilingContext::IsExternalTypeDefParttern()
+{
+	Token t0 = PeekNextToken(0);
+	Token t1 = PeekNextToken(1);
+
+	if (t0.IsEqual("extern") && t1.GetType() == Token::kIdentifier) {
+		return true;
+	}
+	else
+		return false;
 }
 
 bool CompilingContext::IsIfExpPartten()
@@ -786,8 +795,9 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 	if (varType == VarType::kInvalid) {
 		pStructDef = curDomain->GetStructDefineByName(curT.ToStdString());
 		varType = VarType::kStructure;
+		if (!pStructDef)
+			varType = VarType::kExternType;
 	}
-
 	
 	std::list<std::auto_ptr<Exp_VarDef> > tempOutDefs;
 	bool bContinue = false;;
@@ -1022,6 +1032,28 @@ bool CompilingContext::ParseSingleExpression(CodeDomain* curDomain, const char* 
 		else
 			return false;
 	}
+	else if ((GetStatusCode() & kAlllowStructDef) && IsExternalTypeDefParttern()) {
+		Token curT = GetNextToken();
+		if (!curT.IsEqual("extern")) {
+			AddErrorMessage(curT, "Keyword \"extern\" is expected.");
+			return false;
+		}
+		curT = GetNextToken();
+		if (IsBuiltInType(curT) || IsKeyWord(curT)) {
+			AddErrorMessage(curT, "External type cannot conflict with built-in types or keywords.");
+			return false;
+		}
+		
+		if (PeekNextToken(0).IsEqual(";")) {
+			curDomain->AddExternalType(curT.ToStdString());
+			GetNextToken();
+		}
+		else {
+			AddErrorMessage(curT, "\";\" is expected.");
+			return false;
+		}
+
+	}
 	else if (GetStatusCode() & kAllowValueExp) {
 
 		Exp_ValueEval* pNewExp = NULL;
@@ -1216,6 +1248,16 @@ void CodeDomain::AddForExpression(Exp_For* exp)
 	}
 }
 
+bool CodeDomain::AddExternalType(const std::string& typeName)
+{
+	if (mExternalTypes.find(typeName) != mExternalTypes.end())
+		return false;
+	else {
+		mExternalTypes.insert(typeName);
+		return true;
+	}
+}
+
 void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
 {
 	if (pStructDef)
@@ -1224,7 +1266,7 @@ void CodeDomain::AddDefinedType(Exp_StructDef* pStructDef)
 
 bool CodeDomain::IsTypeDefined(const std::string& typeName) const
 {
-	if (mDefinedStructures.find(typeName) == mDefinedStructures.end()) 
+	if (mDefinedStructures.find(typeName) == mDefinedStructures.end() && mExternalTypes.find(typeName) == mExternalTypes.end()) 
 		return mpParentDomain ? mpParentDomain->IsTypeDefined(typeName) : false;
 	else
 		return true;
@@ -1379,7 +1421,10 @@ bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType,
 	if (retType.type == VarType::kInvalid) {
 		outType = VarType::kStructure;
 		outStructDef = curDomain->GetStructDefineByName(curT.ToStdString());
+		if (!outStructDef)
+			outType = VarType::kExternType;
 	}
+
 	return true;
 }
 
@@ -1746,10 +1791,6 @@ bool Exp_UnaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vec
 		errMsg = "\"!\" must be followed with boolean expression.";
 		return false;
 	}
-	else if (mOpType != "-") {
-		errMsg = "Unrecoginzed unary operator.";
-		return false;
-	}
 
 	mCachedTypeInfo = outType;
 	return true;
@@ -1782,6 +1823,21 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 		}
 		else {
 			errMsg = "Cannot do binary operation between structure or built-in types.";
+			return false;
+		}
+	}
+
+	if (leftType.type == VarType::kExternType || rightType.type == VarType::kExternType) {
+		if (mOperator == "=") {
+			if (leftType.type != rightType.type) {
+				errMsg = "Cannot do binary operation between external type and internal type";
+				return false;
+			}
+			else
+				return true;
+		}
+		else {
+			errMsg = "Cannot do binary operation between external types";
 			return false;
 		}
 	}

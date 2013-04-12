@@ -115,6 +115,8 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 		break;
 	case VarType::kBoolean:
 		return SC_INT_TYPE; // Use integer to represent boolean value
+	case VarType::kExternType:
+		return llvm::PointerType::get(Type::getInt8Ty(getGlobalContext()), 0);
 	case VarType::kVoid:
 		return Type::getVoidTy(getGlobalContext());
 	}

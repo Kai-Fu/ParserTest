@@ -163,7 +163,11 @@ bool IsTypeCompatible(VarType dest, VarType from, bool& FtoIwarning)
 	bool ret = false;
 	bool destIsI = false;
 	FtoIwarning = false;
+
 	if (dest == VarType::kBoolean && from == VarType::kBoolean)
+		return true;
+
+	if (dest == VarType::kExternType && from == VarType::kExternType)
 		return true;
 
 	switch (dest) {

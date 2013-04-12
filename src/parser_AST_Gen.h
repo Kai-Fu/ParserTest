@@ -3,6 +3,7 @@
 #include <vector>
 #include <list>
 #include <hash_map>
+#include <hash_set>
 #include <set>
 #include "parser_defines.h"
 
@@ -137,6 +138,7 @@ namespace SC {
 		std::hash_map<std::string, Exp_StructDef*> mDefinedStructures;
 		std::hash_map<std::string, Exp_VarDef*> mDefinedVariables;
 		std::hash_map<std::string, Exp_FunctionDecl*> mDefinedFunctions;
+		std::hash_set<std::string> mExternalTypes;
 
 		std::vector<Expression*> mExpressions;
 
@@ -160,6 +162,7 @@ namespace SC {
 		void AddDomainExpression(CodeDomain* exp);
 		void AddIfExpression(Exp_If* exp);
 		void AddForExpression(Exp_For* exp);
+		bool AddExternalType(const std::string& typeName);
 
 		bool IsTypeDefined(const std::string& typeName) const;
 		bool IsVariableDefined(const std::string& varName, bool includeParent) const;
@@ -507,6 +510,7 @@ namespace SC {
 		bool IsVarDefinePartten(bool allowInit);
 		bool IsStructDefinePartten();
 		bool IsFunctionDefinePartten();
+		bool IsExternalTypeDefParttern();
 		bool IsIfExpPartten();
 		
 		Token ScanForToken(std::string& errorMsg);

@@ -26,6 +26,7 @@ namespace SC {
 
 		kStructure,
 		kVoid,
+		kExternType,
 		kInvalid
 		};
 
