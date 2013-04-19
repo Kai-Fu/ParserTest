@@ -7,6 +7,7 @@ llvm::Module* CG_Context::TheModule = NULL;
 llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
 llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
 std::hash_map<std::string, void*> CG_Context::sGlobalFuncSymbols;
+	std::hash_map<std::string, PFN_TypeInitializer> CG_Context::sExternalTypeInitializers;
 
 bool InitializeCodeGen()
 {

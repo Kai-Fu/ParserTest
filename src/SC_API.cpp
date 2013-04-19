@@ -66,6 +66,10 @@ bool KSC_AddExternalFunction(const char* funcName, void* funcPtr)
 	return true;
 }
 
+void KSC_AddExternalTypeInitializer(const char* typeName, PFN_TypeInitializer initFunc)
+{
+	SC::CG_Context::sExternalTypeInitializers[typeName] = initFunc;
+}
 
 bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr)
 {

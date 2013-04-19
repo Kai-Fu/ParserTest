@@ -59,6 +59,7 @@ namespace SC {
 			kComma,
 			kSemiColon,
 			kPeriod,
+			kString,
 			kUnknown
 		};
 	private:
@@ -84,6 +85,7 @@ namespace SC {
 		bool IsEqual(const char* dest) const;
 		bool IsEqual(const Token& dest) const;
 		void ToAnsiString(char* dest) const;
+		const char* GetRawData() const;
 		std::string ToStdString() const;
 	};
 	
@@ -435,6 +437,19 @@ namespace SC {
 		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 	};
 
+	class Exp_ConstString : public Exp_ValueEval
+	{
+	private:
+		const char* mStringPtr;
+	public:
+		Exp_ConstString(const char* pString);
+		virtual ~Exp_ConstString();
+		const char* GetStringData() const;
+		virtual llvm::Value* GenerateCode(CG_Context* context) const;
+
+		virtual bool CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
+	};
+
 	class Exp_If : public Expression
 	{
 		friend class CodeDomain;
@@ -464,6 +479,7 @@ namespace SC {
 		virtual bool CheckSemantic(Exp_ValueEval::TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg);
 		static Exp_For* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
+
 
 	class RootDomain : public CodeDomain
 	{
@@ -501,7 +517,7 @@ namespace SC {
 		std::list<Token> mBufferedToken;
 		std::list<std::pair<Token, std::string> > mErrorMessages;
 		std::list<std::pair<Token, std::string> > mWarningMessages;
-
+		std::list<std::string> mConstStrings;
 		std::list<int> mStatusCode;
 	public:
 		Exp_FunctionDecl* mpCurrentFunc;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parser_AST_Gen.h"
+#include "SC_API.h"
 
 #include <llvm/DerivedTypes.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -49,6 +50,7 @@ public:
 	static llvm::FunctionPassManager* TheFPM;
 	static llvm::IRBuilder<> sBuilder;
 	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
+	static std::hash_map<std::string, PFN_TypeInitializer> sExternalTypeInitializers;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);

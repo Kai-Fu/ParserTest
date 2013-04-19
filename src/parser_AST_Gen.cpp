@@ -164,6 +164,11 @@ void Token::ToAnsiString(char* dest) const
 	dest[i] = '\0';
 }
 
+const char* Token::GetRawData() const
+{
+	return mpData;
+}
+
 std::string Token::ToStdString() const
 {
 	char tempString[MAX_TOKEN_LENGTH + 1];
@@ -198,6 +203,8 @@ static bool _isFirstN_Equal(const char* test_str, const char* dest)
 
 Token CompilingContext::ScanForToken(std::string& errorMsg)
 {
+	// First skip white space characters and comments
+	//
 	while (1) {
 		const char* beforeSkip = mCurParsingPtr;
 		// Eat the white spaces and new line characters.
@@ -249,6 +256,38 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 		// Break from this loop since the pointer doesn't move forward
 		if (beforeSkip == mCurParsingPtr)
 			break;
+	}
+
+	// Then read the constant string value
+	// 
+	if (*mCurParsingPtr == '"') {
+		mCurParsingPtr++; // Skip the starting " token
+		mConstStrings.push_back("");
+		std::string& newString = mConstStrings.back();
+		while (1) {
+			if (*mCurParsingPtr != '\\' && *mCurParsingPtr != '"') {
+				newString += *mCurParsingPtr;
+				mCurParsingPtr++;
+			}
+			else if (*mCurParsingPtr == '\\') {
+				mCurParsingPtr++;
+				switch (*mCurParsingPtr) {
+				case 'n':
+					newString += "\n";
+					break;
+				default:
+					newString += *mCurParsingPtr;
+					break;
+				}
+				mCurParsingPtr++;
+			}
+			else {
+				mCurParsingPtr++;
+				break;
+			}
+		}
+
+		return Token(&newString[0], newString.length(), mCurParsingLOC, Token::kString);
 	}
 
 	Token ret = Token::sInvalid;
@@ -1431,6 +1470,10 @@ bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType,
 Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 {
 	Token curT = GetNextToken();
+	if (curT.GetType() == Token::kString) {
+		return new Exp_ConstString(curT.GetRawData());
+	}
+
 	if (!curT.IsEqual("-") &&
 		curT.GetType() != Token::kIdentifier && 
 		curT.GetType() != Token::kUnaryOp && 
@@ -1829,6 +1872,7 @@ bool Exp_BinaryOp::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::ve
 
 	if (leftType.type == VarType::kExternType || rightType.type == VarType::kExternType) {
 		if (mOperator == "=") {
+
 			if (leftType.type != rightType.type) {
 				errMsg = "Cannot do binary operation between external type and internal type";
 				return false;
@@ -2367,6 +2411,31 @@ bool Exp_FunctionCall::CheckSemantic(TypeInfo& outType, std::string& errMsg, std
 	return true;
 }
 
+Exp_ConstString::Exp_ConstString(const char* pString)
+{
+	mStringPtr = pString;
+}
+
+Exp_ConstString::~Exp_ConstString()
+{
+
+}
+
+const char* Exp_ConstString::GetStringData() const
+{
+	return mStringPtr;
+}
+
+bool Exp_ConstString::CheckSemantic(TypeInfo& outType, std::string& errMsg, std::vector<std::string>& warnMsg)
+{
+	outType.type = VarType::kExternType;
+	outType.assignable = false;
+	outType.pStructDef = NULL;
+	outType.arraySize = 0;
+
+	mCachedTypeInfo = outType;
+	return true;
+}
 
 Exp_Indexer::Exp_Indexer(Exp_ValueEval* pExp, Exp_ValueEval* pIndex)
 {

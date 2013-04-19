@@ -24,6 +24,7 @@ float TestFunc_1(float l)
 
 int run_test()
 {
+	MyExtType v = "Abcdfdsdv dfsdf";
 	float res0 = TestFunc_0(2, 0.5);
 	float res1 = TestFunc_1(2);
 	CompareTwoInt(res0*1000, res1*1000);
