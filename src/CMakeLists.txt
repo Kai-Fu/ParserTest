@@ -1,7 +1,7 @@
 add_definitions( -DKSC_BUILD_LIB )
 add_definitions( "/wd4800 /wd4146 /wd4996 /wd4244 " )
 
-set( LLVM_SDK_PATH $ENV{LLVM_INSTALL_PATH} )
+set( LLVM_SDK_PATH $ENV{LLVM_INSTALL_PATH} CACHE PATH "Path to the LLVM SDK." )
 
 include_directories( "${LLVM_SDK_PATH}/include" )
 

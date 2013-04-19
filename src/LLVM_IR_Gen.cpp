@@ -190,7 +190,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 	BasicBlock *retBB = BasicBlock::Create(getGlobalContext(), mFuncName + "_exit");
 	
 	CG_Context::sBuilder.SetInsertPoint(BB);
-	llvm::Value* pRetValuePtr = CG_Context::sBuilder.CreateAlloca(retType, 0, mFuncName + "_retValue");
+	llvm::Value* pRetValuePtr = mReturnType == VarType::kVoid ? NULL : CG_Context::sBuilder.CreateAlloca(retType, 0, mFuncName + "_retValue");
 	CG_Context* funcGC_ctx = context->CreateChildContext(F, retBB, pRetValuePtr);
 
 	Function::arg_iterator AI = F->arg_begin();
@@ -220,7 +220,7 @@ llvm::Value* Exp_FunctionDecl::GenerateCode(CG_Context* context) const
 	assert(retType);
 	CG_Context::sBuilder.SetInsertPoint(retBB);
 	if (mReturnType == VarType::kVoid)
-		return CG_Context::sBuilder.CreateRetVoid();
+		CG_Context::sBuilder.CreateRetVoid();
 	else
 		CG_Context::sBuilder.CreateRet(CG_Context::sBuilder.CreateLoad(pRetValuePtr));
 
