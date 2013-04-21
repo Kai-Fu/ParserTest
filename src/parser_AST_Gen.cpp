@@ -262,6 +262,7 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	// 
 	if (*mCurParsingPtr == '"') {
 		mCurParsingPtr++; // Skip the starting " token
+		mConstStrings.push_back("");
 		std::string& newString = mConstStrings.back();
 		while (1) {
 			if (*mCurParsingPtr != '\\' && *mCurParsingPtr != '"') {
@@ -716,6 +717,29 @@ int Exp_StructDef::GetElementIdxByName(const std::string& name) const
 		return it->second;
 	else
 		return -1;
+}
+
+void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
+{
+	ref.clear();
+
+	const Exp_StructDef* childStruct;
+	int arraySize;
+	VarType type;
+	for (int i = 0; i < GetElementCount(); ++i) {
+		childStruct = NULL;
+		arraySize = 0;
+		type = GetElementType(i, childStruct, arraySize);
+		StructHandle hStruct = NULL;
+		if (childStruct) {
+			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
+			childStruct->ConvertToDescription(*pStructDesc);
+			hStruct = (StructHandle)pStructDesc;
+		}
+
+		KSC_TypeInfo newElem = {type, arraySize, hStruct};
+		ref.push_back(newElem);
+	}
 }
 
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)

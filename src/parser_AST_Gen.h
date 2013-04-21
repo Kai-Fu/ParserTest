@@ -218,6 +218,8 @@ namespace SC {
 		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef, int& arraySize) const;
 		int GetElementIdxByName(const std::string& name) const;
 
+		void ConvertToDescription(KSC_StructDesc& ref) const;
+
 		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
 
@@ -489,7 +491,7 @@ namespace SC {
 		RootDomain(CodeDomain* pRefDomain);
 		virtual ~RootDomain();
 
-		bool JIT_Compile(CG_Context* pPredefine);
+		bool JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc);
 		void* GetFuncPtrByName(const std::string& funcName);
 	};
 

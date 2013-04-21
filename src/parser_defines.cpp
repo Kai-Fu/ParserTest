@@ -189,6 +189,21 @@ bool IsTypeCompatible(VarType dest, VarType from, bool& FtoIwarning)
 	return ret;
 }
 
-
-
 } // namespace SC
+
+
+KSC_StructDesc::~KSC_StructDesc()
+{
+	for (int i = 0; i < (int)this->size(); ++i) {
+		if ((*this)[i].type == SC::VarType::kStructure)
+			delete (KSC_StructDesc*)(*this)[i].hStruct;
+	}
+}
+
+KSC_ModuleDesc::~KSC_ModuleDesc()
+{
+	std::hash_map<std::string, KSC_StructDesc*>::iterator it = mGlobalStructures.begin();
+	for (; it != mGlobalStructures.end(); ++it) {
+		delete it->second;
+	}
+}

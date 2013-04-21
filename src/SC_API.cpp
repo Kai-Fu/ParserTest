@@ -2,11 +2,12 @@
 #include "IR_Gen_Context.h"
 #include "parser_AST_Gen.h"
 #include <string>
-
+#include <list>
 
 static std::string			s_lastErrMsg;
 SC::RootDomain*				s_predefineDomain = NULL;
 SC::CG_Context				s_predefineCtx;
+std::list<KSC_ModuleDesc*>	s_modules;
 
 int __int_pow(int base, int p)
 {
@@ -85,18 +86,19 @@ bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, vo
 
 	bool ret = false;
 	{
-
+		KSC_ModuleDesc* pModuleDesc = new KSC_ModuleDesc;
 		SC::CompilingContext scContext(NULL);
 		std::auto_ptr<SC::RootDomain> scDomain(scContext.Parse(sourceCode, s_predefineDomain));
 		if (scDomain.get() == NULL) {
 			scContext.PrintErrorMessage(&s_lastErrMsg);
 		}
 		else {
-			if (!scDomain->JIT_Compile(&s_predefineCtx)) {
+			if (!scDomain->JIT_Compile(&s_predefineCtx, *pModuleDesc)) {
+				delete pModuleDesc;
 				s_lastErrMsg = "Failed to compile.";
 			}
 			else{
-
+				s_modules.push_back(pModuleDesc);
 				int i = 0;
 				for (; i < funcCnt; ++i) {
 					funcPtr[i] = scDomain->GetFuncPtrByName(funcNames[i]);

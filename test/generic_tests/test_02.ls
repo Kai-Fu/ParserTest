@@ -8,10 +8,13 @@ float TestFunc_0(float l, float r)
 }
 
 extern MyExtType;
+extern MyExtType1;
 
 float ExternFunc(MyExtType arg)
 {
-	MyExtType tmp = arg;
+	MyExtType1 tmp = arg;
+	MyExtType1 tmp1[3];
+	tmp1[1] = arg;
 	bool tmpB = true;
 	bool tmpA = !tmpB;
 	return 123.45;
@@ -24,7 +27,7 @@ float TestFunc_1(float l)
 
 int run_test()
 {
-	MyExtType v = "Abcdfdsdv dfsdf";
+
 	float res0 = TestFunc_0(2, 0.5);
 	float res1 = TestFunc_1(2);
 	CompareTwoInt(res0*1000, res1*1000);

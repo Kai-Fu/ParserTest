@@ -228,7 +228,7 @@ llvm::Function* CG_Context::GetFuncDeclByName(const std::string& funcName)
 		return mpParent ? mpParent->GetFuncDeclByName(funcName) : NULL;
 }
 
-bool RootDomain::JIT_Compile(CG_Context* pPredefine)
+bool RootDomain::JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc)
 {
 	CG_Context* cgCtx = pPredefine->CreateChildContext(pPredefine->GetCurrentFunc(), pPredefine->GetFuncRetBlk(), pPredefine->GetRetValuePtr());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
@@ -239,6 +239,13 @@ bool RootDomain::JIT_Compile(CG_Context* pPredefine)
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
 
 			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcValue;
+		}
+
+		Exp_StructDef* pStructDef = dynamic_cast<Exp_StructDef*>(mExpressions[i]);
+		if (pStructDef) {
+			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
+			pStructDef->ConvertToDescription(*pStructDesc);
+			mouduleDesc.mGlobalStructures[pStructDef->GetStructureName()] = pStructDesc;
 		}
 	}
 	delete cgCtx;

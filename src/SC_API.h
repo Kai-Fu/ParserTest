@@ -35,7 +35,15 @@ namespace SC {
 		kExternType,
 		kInvalid
 	};
+
 }
+
+struct KSC_TypeInfo
+{
+	SC::VarType type;
+	int arraySize;
+	StructHandle hStruct;
+};
 
 extern "C" {
 
@@ -47,12 +55,12 @@ extern "C" {
 
 	KSC_API FunctionHandle KSC_GetFunctionHandleByName(const char* funcName, ModuleHandle hModule);
 	KSC_API int KSC_GetFunctionArgumentCount(FunctionHandle hFunc, ModuleHandle hModule);
-	KSC_API SC::VarType KSC_GetFunctionArgumentType(FunctionHandle hFunc, ModuleHandle hModule, int argIdx, StructHandle* hOutStruct = NULL);
-	KSC_API SC::VarType KSC_GetFunctionReturnType(FunctionHandle hFunc, ModuleHandle hModule, StructHandle* hOutStruct = NULL);
+	KSC_API KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, ModuleHandle hModule, int argIdx);
+	KSC_API KSC_TypeInfo KSC_GetFunctionReturnType(FunctionHandle hFunc, ModuleHandle hModule);
 
 	KSC_API StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hModule);
 	KSC_API void* KSC_GetStructMember(StructHandle hStruct, ModuleHandle hModule, const char* member);
-	KSC_API SC::VarType KSC_GetStructMemberType(StructHandle hStruct, ModuleHandle hModule, const char* member, StructHandle* hOutStruct = NULL);
+	KSC_API KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, ModuleHandle hModule, const char* member);
 	KSC_API bool KSC_SetStructMember(StructHandle hStruct, ModuleHandle hModule, const char* member, void* data);
 	KSC_API int KSC_GetStructSize(StructHandle hStruct, ModuleHandle hModule);
 
