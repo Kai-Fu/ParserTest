@@ -262,7 +262,6 @@ Token CompilingContext::ScanForToken(std::string& errorMsg)
 	// 
 	if (*mCurParsingPtr == '"') {
 		mCurParsingPtr++; // Skip the starting " token
-		mConstStrings.push_back("");
 		std::string& newString = mConstStrings.back();
 		while (1) {
 			if (*mCurParsingPtr != '\\' && *mCurParsingPtr != '"') {
@@ -442,6 +441,25 @@ RootDomain* CompilingContext::Parse(const char* content, CodeDomain* pRefDomain)
 	else {
 		delete rootDomain;
 		return NULL;
+	}
+}
+
+bool CompilingContext::ParsePartial(const char* content, CodeDomain* pDomain)
+{
+	mBufferedToken.clear();
+	mErrorMessages.clear();
+	mContentPtr = content;
+	mCurParsingPtr = mContentPtr;
+	mCurParsingLOC = 1;
+
+	PushStatusCode(kAlllowStructDef | kAlllowFuncDef);
+	while (ParseSingleExpression(pDomain, NULL));
+
+	if (IsEOF() && mErrorMessages.empty()) {
+		return true;
+	}
+	else {
+		return false;
 	}
 }
 
@@ -1470,9 +1488,6 @@ bool CompilingContext::ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType,
 Exp_ValueEval* CompilingContext::ParseSimpleExpression(CodeDomain* curDomain)
 {
 	Token curT = GetNextToken();
-	if (curT.GetType() == Token::kString) {
-		return new Exp_ConstString(curT.GetRawData());
-	}
 
 	if (!curT.IsEqual("-") &&
 		curT.GetType() != Token::kIdentifier && 

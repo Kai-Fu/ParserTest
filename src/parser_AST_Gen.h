@@ -548,6 +548,7 @@ namespace SC {
 		bool ExpectTypeAndEat(CodeDomain* curDomain, VarType& outType, const Exp_StructDef*& outStructDef);
 
 		RootDomain* Parse(const char* content, CodeDomain* pRefDomain);
+		bool ParsePartial(const char* content, CodeDomain* pDomain);
 
 		void PushStatusCode(int code);
 		int GetStatusCode();

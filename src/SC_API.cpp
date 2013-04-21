@@ -13,7 +13,7 @@ int __int_pow(int base, int p)
 	return _Pow_int(base, p);
 }
 
-bool KSC_Initialize()
+bool KSC_Initialize(const char* sharedCode)
 {
 	SC::Initialize_AST_Gen();
 	bool ret = SC::InitializeCodeGen();
@@ -35,11 +35,17 @@ bool KSC_Initialize()
 		KSC_AddExternalFunction("sqrt", sqrtf);
 		KSC_AddExternalFunction("fabs", fabsf);
 
-		s_predefineDomain = preContext.Parse(intrinsicFuncDecal, NULL);
-		if (s_predefineDomain) {
-			for (int i = 0; i < s_predefineDomain->GetExpressionCnt(); ++i)
-				s_predefineDomain->GetExpression(i)->GenerateCode(&s_predefineCtx);
+		s_predefineDomain = new SC::RootDomain(NULL);
+		if (!preContext.ParsePartial(intrinsicFuncDecal, s_predefineDomain))
+			return false;
+
+		if (sharedCode) {
+			if (!preContext.ParsePartial(sharedCode, s_predefineDomain))
+				return false;
 		}
+
+		for (int i = 0; i < s_predefineDomain->GetExpressionCnt(); ++i)
+			s_predefineDomain->GetExpression(i)->GenerateCode(&s_predefineCtx);
 
 		return true;
 	}
@@ -76,7 +82,6 @@ bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, vo
 #ifdef WANT_MEM_LEAK_CHECK
 	size_t expInstCnt = SC::Expression::s_instances.size();
 #endif	
-
 
 	bool ret = false;
 	{

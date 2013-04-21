@@ -1,34 +1,8 @@
 #pragma once
 #define MAX_TOKEN_LENGTH 100
+#include "SC_API.h"
 
 namespace SC {
-
-#ifdef WANT_DOUBLE_FLOAT
-	typedef double Float;
-#else
-	typedef float Float;
-#endif
-	typedef int Int;
-	typedef int Boolean;
-	
-	enum VarType {
-		kFloat,
-		kFloat2,
-		kFloat3,
-		kFloat4,
-
-		kInt,
-		kInt2,
-		kInt3,
-		kInt4,
-
-		kBoolean,
-
-		kStructure,
-		kVoid,
-		kExternType,
-		kInvalid
-		};
 
 	bool IsBuiltInType(VarType type);
 	bool IsFloatType(VarType type);

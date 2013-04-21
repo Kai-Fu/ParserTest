@@ -38,15 +38,8 @@ llvm::Value* Exp_VarDef::GenerateCode(CG_Context* context) const
 	std::string varName = mVarName.ToStdString();
 	llvm::Value* varPtr = context->NewVariable(this, NULL);
 	if (mpInitValue) {
-		Exp_ConstString* pStringExp = dynamic_cast<Exp_ConstString*>(mpInitValue);
-		if (pStringExp) {
-			// TODO: handle the external type initialization
-			printf(pStringExp->GetStringData());
-		}
-		else {
-			llvm::Value* initValue = context->CastValueType(mpInitValue->GenerateCode(context), mpInitValue->GetCachedTypeInfo().type, mVarType);
-			CG_Context::sBuilder.CreateStore(initValue, varPtr);
-		}
+		llvm::Value* initValue = context->CastValueType(mpInitValue->GenerateCode(context), mpInitValue->GetCachedTypeInfo().type, mVarType);
+		CG_Context::sBuilder.CreateStore(initValue, varPtr);
 	}
 	return varPtr;
 }

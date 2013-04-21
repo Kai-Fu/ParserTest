@@ -233,6 +233,7 @@ bool RootDomain::JIT_Compile(CG_Context* pPredefine)
 	CG_Context* cgCtx = pPredefine->CreateChildContext(pPredefine->GetCurrentFunc(), pPredefine->GetFuncRetBlk(), pPredefine->GetRetValuePtr());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
 		llvm::Value* value = mExpressions[i]->GenerateCode(cgCtx);
+
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
