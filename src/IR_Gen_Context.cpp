@@ -53,7 +53,6 @@ void DestoryCodeGen()
 {
 	delete CG_Context::TheFPM;
 	delete CG_Context::TheExecutionEngine;
-	delete CG_Context::TheModule;
 }
 
 

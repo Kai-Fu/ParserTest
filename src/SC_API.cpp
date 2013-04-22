@@ -57,6 +57,10 @@ bool KSC_Initialize(const char* sharedCode)
 
 void KSC_Destory()
 {
+	std::list<KSC_ModuleDesc*>::iterator it = s_modules.begin();
+	for (; it != s_modules.end(); ++it) {
+		delete *it;
+	}
 	SC::DestoryCodeGen();
 	SC::Finish_AST_Gen();
 }

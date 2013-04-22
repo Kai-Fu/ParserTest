@@ -48,6 +48,7 @@ struct KSC_TypeInfo
 extern "C" {
 
 	KSC_API bool KSC_Initialize(const char* sharedCode = NULL);
+	KSC_API void KSC_Destory();
 	KSC_API const char* KSC_GetLastErrorMsg();
 	KSC_API bool KSC_AddExternalFunction(const char* funcName, void* funcPtr);
 
