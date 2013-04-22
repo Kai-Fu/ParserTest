@@ -73,18 +73,13 @@ bool KSC_AddExternalFunction(const char* funcName, void* funcPtr)
 	return true;
 }
 
-void KSC_AddExternalTypeInitializer(const char* typeName, PFN_TypeInitializer initFunc)
-{
-	SC::CG_Context::sExternalTypeInitializers[typeName] = initFunc;
-}
-
-bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, void** funcPtr)
+ModuleHandle KSC_Compile(const char* sourceCode)
 {
 #ifdef WANT_MEM_LEAK_CHECK
 	size_t expInstCnt = SC::Expression::s_instances.size();
 #endif	
 
-	bool ret = false;
+	KSC_ModuleDesc* ret = NULL;
 	{
 		KSC_ModuleDesc* pModuleDesc = new KSC_ModuleDesc;
 		SC::CompilingContext scContext(NULL);
@@ -93,19 +88,13 @@ bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, vo
 			scContext.PrintErrorMessage(&s_lastErrMsg);
 		}
 		else {
-			if (!scDomain->JIT_Compile(&s_predefineCtx, *pModuleDesc)) {
+			if (!scDomain->CompileToIR(&s_predefineCtx, *pModuleDesc)) {
 				delete pModuleDesc;
 				s_lastErrMsg = "Failed to compile.";
 			}
 			else{
 				s_modules.push_back(pModuleDesc);
-				int i = 0;
-				for (; i < funcCnt; ++i) {
-					funcPtr[i] = scDomain->GetFuncPtrByName(funcNames[i]);
-					if (funcPtr[i] == NULL)
-						break;
-				}
-				ret = (i == funcCnt);
+				ret = pModuleDesc;
 			}
 		}
 	}
@@ -114,4 +103,132 @@ bool KSC_Compile(const char* sourceCode, const char** funcNames, int funcCnt, vo
 	assert(SC::Expression::s_instances.size() == expInstCnt);
 #endif
 	return ret;
+}
+
+void* KSC_GetFunctionPtr(const char* funcName, ModuleHandle hModule)
+{
+	KSC_ModuleDesc* pModule = (KSC_ModuleDesc*)hModule;
+	if (!pModule)
+		return NULL;
+
+	std::hash_map<std::string, llvm::Function*>::iterator it = pModule->mFunctions.find(funcName);
+	if (it != pModule->mFunctions.end()) {
+		
+		if (!llvm::verifyFunction(*it->second, llvm::PrintMessageAction))
+			return SC::CG_Context::TheExecutionEngine->getPointerToFunction(it->second);
+		else
+			return NULL;
+
+	}
+	else
+		return NULL;
+}
+
+FunctionHandle KSC_GetFunctionHandleByName(const char* funcName, ModuleHandle hModule)
+{
+	KSC_ModuleDesc* pModule = (KSC_ModuleDesc*)hModule;
+	if (!pModule)
+		return NULL;
+
+	if (pModule->mFunctionDesc.find(funcName) != pModule->mFunctionDesc.end()) {
+		return pModule->mFunctionDesc[funcName];
+	}
+	else
+		return NULL;
+}
+
+int KSC_GetFunctionArgumentCount(FunctionHandle hFunc)
+{
+	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
+	if (!pFuncDesc)
+		return NULL;
+
+	return (int)pFuncDesc->mArgumentTypes.size();
+}
+
+KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx)
+{
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
+	if (!pFuncDesc)
+		return ret;
+
+	return pFuncDesc->mArgumentTypes[argIdx];
+}
+
+KSC_TypeInfo KSC_GetFunctionReturnType(FunctionHandle hFunc)
+{
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
+	if (!pFuncDesc)
+		return ret;
+	return pFuncDesc->mReturnType;
+}
+
+StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hModule)
+{
+	KSC_ModuleDesc* pModule = (KSC_ModuleDesc*)hModule;
+	if (!pModule)
+		return NULL;
+
+	if (pModule->mGlobalStructures.find(structName) != pModule->mGlobalStructures.end())
+		return pModule->mGlobalStructures[structName];
+	else
+		return NULL;
+}
+
+KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, const char* member)
+{
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
+	if (!pStructDesc)
+		return ret;
+	std::hash_map<std::string, KSC_StructDesc::MemberInfo>::iterator it = pStructDesc->mMemberIndices.find(member);
+	if (it != pStructDesc->mMemberIndices.end()) {
+		return (*pStructDesc)[it->second.idx];
+	}
+	else
+		return ret;
+}
+
+void* KSC_GetStructMemberPtr(StructHandle hStruct, void* pStructVar, const char* member)
+{
+	int offset = 0;
+	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
+	if (!pStructDesc)
+		return NULL;
+	std::hash_map<std::string, KSC_StructDesc::MemberInfo>::iterator it = pStructDesc->mMemberIndices.find(member);
+	if (it != pStructDesc->mMemberIndices.end()) {
+		offset = it->second.mem_offset;
+	}
+	else
+		return NULL;
+
+	return ((unsigned char*)pStructVar + offset);
+}
+
+bool KSC_SetStructMemberData(StructHandle hStruct, void* pStructVar, const char* member, void* data)
+{
+	int offset = 0;
+	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
+	if (!pStructDesc)
+		return false;
+	std::hash_map<std::string, KSC_StructDesc::MemberInfo>::iterator it = pStructDesc->mMemberIndices.find(member);
+	if (it != pStructDesc->mMemberIndices.end()) {
+		offset = it->second.mem_offset;
+	}
+	else
+		return false;
+
+	memcpy(((unsigned char*)pStructVar + offset), data, it->second.mem_size);
+	return true;
+}
+
+int KSC_GetStructSize(StructHandle hStruct)
+{
+	int offset = 0;
+	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
+	if (!pStructDesc)
+		return 0;
+	return pStructDesc->mStructSize;
 }

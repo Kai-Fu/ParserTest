@@ -4,6 +4,10 @@
 #include <vector>
 #include <hash_map>
 
+namespace llvm {
+	class Function;
+}
+
 namespace SC {
 
 	bool IsBuiltInType(VarType type);
@@ -22,14 +26,33 @@ class KSC_StructDesc : public std::vector<KSC_TypeInfo>
 {
 public:
 	~KSC_StructDesc();
+	struct MemberInfo
+	{
+		int idx;
+		int mem_offset;
+		int mem_size;
+	};
+	int mStructSize;
+	std::hash_map<std::string, MemberInfo> mMemberIndices;
 };
 
+class KSC_FunctionDesc
+{
+public:
+	~KSC_FunctionDesc();
+
+	std::vector<KSC_TypeInfo> mArgumentTypes;
+	KSC_TypeInfo mReturnType;
+
+};
 
 class KSC_ModuleDesc
 {
 public:
 	~KSC_ModuleDesc();
 
+	std::hash_map<std::string, llvm::Function*> mFunctions;
 	std::hash_map<std::string, KSC_StructDesc*> mGlobalStructures;
+	std::hash_map<std::string, KSC_FunctionDesc*> mFunctionDesc;
 
 };

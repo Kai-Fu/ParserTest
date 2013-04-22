@@ -50,7 +50,6 @@ public:
 	static llvm::FunctionPassManager* TheFPM;
 	static llvm::IRBuilder<> sBuilder;
 	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
-	static std::hash_map<std::string, PFN_TypeInitializer> sExternalTypeInitializers;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);

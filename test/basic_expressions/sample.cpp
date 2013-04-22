@@ -37,27 +37,21 @@ int main(int argc, char* argv[])
 		return -1;
 	else {
 		content[totalLen] = '\0';
-		const char* funcNames[3];
-		void* funcPtrs[3];
 
-		funcNames[0] = "TestBooleanValues";
-		funcNames[1] = "DotProduct";
-		funcNames[2] = "TestSwizzle";
-
-
-		if (!KSC_Compile(content, funcNames, 3, funcPtrs)) {
+		ModuleHandle hModule = KSC_Compile(content);
+		if (!hModule) {
 			printf(KSC_GetLastErrorMsg());
 			return -1;
 		}
 
 		typedef int (*PFN_TestBooleanValues)();
-		PFN_TestBooleanValues TestBooleanValues = (PFN_TestBooleanValues)funcPtrs[0];
+		PFN_TestBooleanValues TestBooleanValues = (PFN_TestBooleanValues)KSC_GetFunctionPtr("TestBooleanValues", hModule);
 		int result = TestBooleanValues();
 		printf("result is %d\n", result);
 
 		{
 			typedef float (*PFN_DotProduct)(float* l, float* r);
-			PFN_DotProduct DotProduct = (PFN_DotProduct)funcPtrs[1];
+			PFN_DotProduct DotProduct = (PFN_DotProduct)KSC_GetFunctionPtr("DotProduct", hModule);
 			float ll[3] = {0.7f, 0.6f, 0.3f};
 			float rr[3] = {0.2f, 0.8f, 0.13f};
 			float fResult = DotProduct(ll, rr);
@@ -66,7 +60,7 @@ int main(int argc, char* argv[])
 
 		{
 			typedef float (*PFN_TestSwizzle)(float* l);
-			PFN_TestSwizzle TestSwizzle = (PFN_TestSwizzle)funcPtrs[2];
+			PFN_TestSwizzle TestSwizzle = (PFN_TestSwizzle)KSC_GetFunctionPtr("TestSwizzle", hModule);
 			float ll[3] = {0.7f, 0.6f, 0.3f};
 			float fResult = TestSwizzle(ll);
 			printf("result is %f\n", fResult);

@@ -37,14 +37,11 @@ int main(int argc, char* argv[])
 		return -1;
 	else {
 		content[totalLen] = '\0';
-		const char* funcNames[1];
-		void* funcPtrs[1];
 
-		funcNames[0] = "HandleArray";
 		KSC_AddExternalFunction("SimpleCallee", SimpleCallee);
 
-
-		if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
+		ModuleHandle hModule = KSC_Compile(content);
+		if (!hModule) {
 			printf(KSC_GetLastErrorMsg());
 			return -1;
 		}
@@ -54,7 +51,7 @@ int main(int argc, char* argv[])
 			float my_array[13];
 		};
 		ArrayCntr array_ref;
-		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))funcPtrs[0];
+		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))KSC_GetFunctionPtr("HandleArray", hModule);
 		HandleArray(&array_ref);
 	}
 	

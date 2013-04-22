@@ -48,19 +48,15 @@ int main(int argc, char* argv[])
 		}
 		else {
 			content[totalLen] = '\0';
-			const char* funcNames[1];
-			void* funcPtrs[1];
 
-			funcNames[0] = "run_test";
-
-
-			if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
+			ModuleHandle hModule = KSC_Compile(content);
+			if (!hModule) {
 				printf(KSC_GetLastErrorMsg());
 				return -1;
 			}
 
 			typedef int (*PFN_run_test)();
-			PFN_run_test run_test = (PFN_run_test)funcPtrs[0];
+			PFN_run_test run_test = (PFN_run_test)KSC_GetFunctionPtr("run_test", hModule);
 			
 			printf("Test %.2d:", test_cast_idx);
 			run_test();

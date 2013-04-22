@@ -1,4 +1,5 @@
 #include "parser_defines.h"
+#include "IR_Gen_Context.h"
 
 namespace SC {
 
@@ -111,6 +112,10 @@ int TypeSize(VarType type)
 		return 3*sizeof(Int);
 	case kInt4:
 		return 4*sizeof(Int);
+	case kBoolean:
+		return sizeof(Int);
+	case kExternType:
+		return sizeof(void*);
 	}
 	return 0;
 }
@@ -202,8 +207,28 @@ KSC_StructDesc::~KSC_StructDesc()
 
 KSC_ModuleDesc::~KSC_ModuleDesc()
 {
-	std::hash_map<std::string, KSC_StructDesc*>::iterator it = mGlobalStructures.begin();
-	for (; it != mGlobalStructures.end(); ++it) {
-		delete it->second;
+	{
+		std::hash_map<std::string, KSC_StructDesc*>::iterator it = mGlobalStructures.begin();
+		for (; it != mGlobalStructures.end(); ++it) {
+			delete it->second;
+		}
 	}
+
+	{
+		std::hash_map<std::string, KSC_FunctionDesc*>::iterator it = mFunctionDesc.begin();
+		for (; it != mFunctionDesc.end(); ++it) {
+			delete it->second;
+		}
+	}
+}
+
+KSC_FunctionDesc::~KSC_FunctionDesc()
+{
+	for (int i = 0; i < (int)mArgumentTypes.size(); ++i) {
+		if (mArgumentTypes[i].type == SC::VarType::kStructure)
+			delete (KSC_StructDesc*)mArgumentTypes[i].hStruct;
+	}
+
+	if (mReturnType.type == SC::VarType::kStructure)
+		delete (KSC_StructDesc*)mReturnType.hStruct;
 }

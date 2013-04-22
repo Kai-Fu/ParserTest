@@ -7,7 +7,6 @@ llvm::Module* CG_Context::TheModule = NULL;
 llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
 llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
 std::hash_map<std::string, void*> CG_Context::sGlobalFuncSymbols;
-	std::hash_map<std::string, PFN_TypeInitializer> CG_Context::sExternalTypeInitializers;
 
 bool InitializeCodeGen()
 {
@@ -228,7 +227,7 @@ llvm::Function* CG_Context::GetFuncDeclByName(const std::string& funcName)
 		return mpParent ? mpParent->GetFuncDeclByName(funcName) : NULL;
 }
 
-bool RootDomain::JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc)
+bool RootDomain::CompileToIR(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc)
 {
 	CG_Context* cgCtx = pPredefine->CreateChildContext(pPredefine->GetCurrentFunc(), pPredefine->GetFuncRetBlk(), pPredefine->GetRetValuePtr());
 	for (int i = 0; i < (int)mExpressions.size(); ++i) {
@@ -237,8 +236,10 @@ bool RootDomain::JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
-
-			mJITedFuncPtr[pFuncDecl->GetFunctionName()] = funcValue;
+			mouduleDesc.mFunctions[pFuncDecl->GetFunctionName()] = funcValue;
+			KSC_FunctionDesc* pFuncDesc = new KSC_FunctionDesc;
+			pFuncDecl->ConvertToDescription(*pFuncDesc);
+			mouduleDesc.mFunctionDesc[pFuncDecl->GetFunctionName()] = pFuncDesc;
 		}
 
 		Exp_StructDef* pStructDef = dynamic_cast<Exp_StructDef*>(mExpressions[i]);
@@ -251,19 +252,6 @@ bool RootDomain::JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc
 	delete cgCtx;
 	CG_Context::TheModule->dump();
 	return true;
-}
-
-void* RootDomain::GetFuncPtrByName(const std::string& funcName)
-{
-	std::hash_map<std::string, llvm::Function*>::iterator it = mJITedFuncPtr.find(funcName);
-	if (it != mJITedFuncPtr.end()) {
-		if (!llvm::verifyFunction(*it->second, llvm::PrintMessageAction))
-			return CG_Context::TheExecutionEngine->getPointerToFunction(it->second);
-		else
-			return NULL;
-	}
-	else
-		return NULL;
 }
 
 llvm::Value* CG_Context::CastValueType(llvm::Value* srcValue, VarType srcType, VarType destType)

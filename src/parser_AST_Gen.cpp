@@ -722,10 +722,12 @@ int Exp_StructDef::GetElementIdxByName(const std::string& name) const
 void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 {
 	ref.clear();
+	ref.mMemberIndices.clear();
 
 	const Exp_StructDef* childStruct;
 	int arraySize;
 	VarType type;
+	int curMemOffset = 0;
 	for (int i = 0; i < GetElementCount(); ++i) {
 		childStruct = NULL;
 		arraySize = 0;
@@ -737,9 +739,24 @@ void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 			hStruct = (StructHandle)pStructDesc;
 		}
 
-		KSC_TypeInfo newElem = {type, arraySize, hStruct};
+		KSC_TypeInfo newElem = {type, arraySize, false, hStruct};
+		std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(i);
+		KSC_StructDesc::MemberInfo memberInfo;
+		memberInfo.idx = i;
+		memberInfo.mem_offset = curMemOffset;
+
+		if (type == VarType::kStructure)
+			memberInfo.mem_size = childStruct->GetStructSize();
+		else
+			memberInfo.mem_size = TypeSize(type);
+
+		ref.mMemberIndices[it->second->GetVarName().ToStdString()] = memberInfo;
 		ref.push_back(newElem);
+
+		curMemOffset += memberInfo.mem_size;
 	}
+
+	ref.mStructSize = curMemOffset;
 }
 
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
@@ -2157,6 +2174,19 @@ bool Exp_FunctionDecl::HasBody() const
 	return mHasBody;
 }
 
+void Exp_FunctionDecl::ConvertToDescription(KSC_FunctionDesc& desc)
+{
+	for (int i = 0; i < (int)mArgments.size(); ++i) {
+		
+		KSC_TypeInfo kscType = {mArgments[i].typeInfo.type, mArgments[i].typeInfo.arraySize, mArgments[i].isByRef, NULL};
+		if (mArgments[i].typeInfo.type == VarType::kStructure) {
+			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
+			mArgments[i].typeInfo.pStructDef->ConvertToDescription(*pStructDesc);
+			kscType.hStruct = pStructDesc;
+		}
+		desc.mArgumentTypes.push_back(kscType);
+	}
+}
 
 Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 {

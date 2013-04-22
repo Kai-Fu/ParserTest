@@ -37,19 +37,15 @@ int main(int argc, char* argv[])
 		return -1;
 	else {
 		content[totalLen] = '\0';
-		const char* funcNames[1];
-		void* funcPtrs[1];
 
-		funcNames[0] = "factorial";
-
-
-		if (!KSC_Compile(content, funcNames, 1, funcPtrs)) {
+		ModuleHandle hModule = KSC_Compile(content);
+		if (!hModule) {
 			printf(KSC_GetLastErrorMsg());
 			return -1;
 		}
 
 		typedef int (*PFN_factorial)(int arg);
-		PFN_factorial factorial = (PFN_factorial)funcPtrs[0];
+		PFN_factorial factorial = (PFN_factorial)KSC_GetFunctionPtr("factorial", hModule);
 		int result = factorial(9);
 		printf("result is %d\n", result);
 	}

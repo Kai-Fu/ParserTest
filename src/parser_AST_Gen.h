@@ -109,13 +109,6 @@ namespace SC {
 		int GetSize();
 	};
 
-	class Operator
-	{
-	public:
-		Operator() {}
-		virtual ~Operator() {}
-	};
-
 	class Expression
 	{
 	public:
@@ -409,6 +402,7 @@ namespace SC {
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
 		bool HasBody() const;
+		void ConvertToDescription(KSC_FunctionDesc& desc);
 
 		static Exp_FunctionDecl* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
@@ -485,14 +479,11 @@ namespace SC {
 
 	class RootDomain : public CodeDomain
 	{
-	private:
-		std::hash_map<std::string, llvm::Function*> mJITedFuncPtr;
 	public:
 		RootDomain(CodeDomain* pRefDomain);
 		virtual ~RootDomain();
 
-		bool JIT_Compile(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc);
-		void* GetFuncPtrByName(const std::string& funcName);
+		bool CompileToIR(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc);
 	};
 
 
