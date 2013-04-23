@@ -43,6 +43,7 @@ struct KSC_TypeInfo
 	int arraySize;
 	bool isRef;
 	StructHandle hStruct;
+	const char* typeString;
 };
 
 extern "C" {

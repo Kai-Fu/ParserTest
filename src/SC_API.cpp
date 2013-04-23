@@ -152,7 +152,7 @@ int KSC_GetFunctionArgumentCount(FunctionHandle hFunc)
 
 KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx)
 {
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
 	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
 	if (!pFuncDesc)
 		return ret;
@@ -162,7 +162,7 @@ KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx)
 
 KSC_TypeInfo KSC_GetFunctionReturnType(FunctionHandle hFunc)
 {
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
 	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
 	if (!pFuncDesc)
 		return ret;
@@ -183,7 +183,7 @@ StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hMod
 
 KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, const char* member)
 {
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL};
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
 	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
 	if (!pStructDesc)
 		return ret;

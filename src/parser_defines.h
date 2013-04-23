@@ -31,6 +31,7 @@ public:
 		int idx;
 		int mem_offset;
 		int mem_size;
+		std::string type_string;
 	};
 	int mStructSize;
 	std::hash_map<std::string, MemberInfo> mMemberIndices;
@@ -42,6 +43,7 @@ public:
 	~KSC_FunctionDesc();
 
 	std::vector<KSC_TypeInfo> mArgumentTypes;
+	std::vector<std::string> mArgTypeStrings;
 	KSC_TypeInfo mReturnType;
 
 };

@@ -173,6 +173,7 @@ namespace SC {
 	class Exp_VarDef : public Expression
 	{
 	private:
+		Token mTypeString;
 		Token mVarName;
 		Exp_ValueEval* mpInitValue;
 		VarType mVarType;
@@ -188,6 +189,7 @@ namespace SC {
 		void SetStructDef(const Exp_StructDef* pStruct);
 		Exp_ValueEval* GetVarInitExp();
 		Token GetVarName() const;
+		Token GetTypeString() const;
 		VarType GetVarType() const;
 		const Exp_StructDef* GetStructDef() const;
 		int GetArrayCnt() const;
@@ -222,6 +224,7 @@ namespace SC {
 		struct TypeInfo {
 			VarType type;
 			const Exp_StructDef* pStructDef;
+			std::string typeString;
 			int arraySize;
 			bool assignable;
 
@@ -382,6 +385,7 @@ namespace SC {
 			Exp_ValueEval::TypeInfo typeInfo;
 			bool isByRef;
 			Token token;
+			Token typeString;
 		};
 
 	private:

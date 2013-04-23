@@ -739,11 +739,12 @@ void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 			hStruct = (StructHandle)pStructDesc;
 		}
 
-		KSC_TypeInfo newElem = {type, arraySize, false, hStruct};
+		KSC_TypeInfo newElem = {type, arraySize, false, hStruct, NULL};
 		std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(i);
 		KSC_StructDesc::MemberInfo memberInfo;
 		memberInfo.idx = i;
 		memberInfo.mem_offset = curMemOffset;
+		memberInfo.type_string = it->second->GetTypeString().ToStdString();
 
 		if (type == VarType::kStructure)
 			memberInfo.mem_size = childStruct->GetStructSize();
@@ -751,6 +752,7 @@ void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 			memberInfo.mem_size = TypeSize(type);
 
 		ref.mMemberIndices[it->second->GetVarName().ToStdString()] = memberInfo;
+		newElem.typeString = memberInfo.type_string.c_str();
 		ref.push_back(newElem);
 
 		curMemOffset += memberInfo.mem_size;
@@ -888,6 +890,7 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 		return false;
 	}
 
+	Token typeString = curT;
 	VarType varType = typeDesc.type;
 	Exp_StructDef* pStructDef = NULL;
 	if (varType == VarType::kInvalid) {
@@ -982,6 +985,7 @@ bool Exp_VarDef::Parse(CompilingContext& context, CodeDomain* curDomain, std::ve
 		}
 
 		Exp_VarDef* ret = new Exp_VarDef(varType, curT, pInitValue);
+		ret->mTypeString = typeString;
 		ret->mArrayCnt = arrayCnt;
 
 		if (varType == VarType::kStructure)
@@ -1452,6 +1456,11 @@ Exp_ValueEval* Exp_VarDef::GetVarInitExp()
 Token Exp_VarDef::GetVarName() const
 {
 	return mVarName;
+}
+
+Token Exp_VarDef::GetTypeString() const
+{
+	return mTypeString;
 }
 
 VarType Exp_VarDef::GetVarType() const
@@ -2176,6 +2185,9 @@ bool Exp_FunctionDecl::HasBody() const
 
 void Exp_FunctionDecl::ConvertToDescription(KSC_FunctionDesc& desc)
 {
+	desc.mArgTypeStrings.resize(mArgments.size());
+	desc.mArgumentTypes.resize(mArgments.size());
+
 	for (int i = 0; i < (int)mArgments.size(); ++i) {
 		
 		KSC_TypeInfo kscType = {mArgments[i].typeInfo.type, mArgments[i].typeInfo.arraySize, mArgments[i].isByRef, NULL};
@@ -2184,7 +2196,9 @@ void Exp_FunctionDecl::ConvertToDescription(KSC_FunctionDesc& desc)
 			mArgments[i].typeInfo.pStructDef->ConvertToDescription(*pStructDesc);
 			kscType.hStruct = pStructDesc;
 		}
-		desc.mArgumentTypes.push_back(kscType);
+		desc.mArgTypeStrings[i] = mArgments[i].typeString.ToStdString();
+		kscType.typeString = desc.mArgTypeStrings.back().c_str();
+		desc.mArgumentTypes[i] = kscType;
 	}
 }
 
@@ -2229,6 +2243,7 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 		return NULL;
 	while (!context.PeekNextToken(0).IsEqual(")")) {
 		Exp_FunctionDecl::ArgDesc argDesc;
+		Token argTypeString = context.PeekNextToken(0);
 		if (!context.ExpectTypeAndEat(curDomain, argDesc.typeInfo.type, argDesc.typeInfo.pStructDef))
 			return NULL;
 
@@ -2245,6 +2260,7 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 			}
 		}
 		argDesc.token = argT;
+		argDesc.typeString = argTypeString;
 		result->mArgments.push_back(argDesc);
 
 		if (context.PeekNextToken(0).IsEqual(","))
