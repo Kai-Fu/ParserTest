@@ -669,23 +669,6 @@ void Exp_StructDef::AddVarDefExpression(Exp_VarDef* exp)
 	mElementName2Idx[exp->GetVarName().ToStdString()] = mExpressions.size() - 1;
 }
 
-int Exp_StructDef::GetStructSize() const
-{
-	int totalSize = 0;
-	std::hash_map<std::string, Exp_VarDef*>::const_iterator it = mDefinedVariables.begin();
-	for (; it != mDefinedVariables.end(); ++it) {
-		int curSize = 0;
-		Exp_VarDef* pVarDef = it->second;
-		if (pVarDef->GetVarType() == VarType::kStructure) 
-			curSize = pVarDef->GetStructDef()->GetStructSize();
-		else
-			curSize = TypeSize(pVarDef->GetVarType());
-
-		totalSize += curSize;
-	}
-
-	return totalSize;
-}
 
 int Exp_StructDef::GetElementCount() const
 {
@@ -719,47 +702,6 @@ int Exp_StructDef::GetElementIdxByName(const std::string& name) const
 		return -1;
 }
 
-void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
-{
-	ref.clear();
-	ref.mMemberIndices.clear();
-
-	const Exp_StructDef* childStruct;
-	int arraySize;
-	VarType type;
-	int curMemOffset = 0;
-	for (int i = 0; i < GetElementCount(); ++i) {
-		childStruct = NULL;
-		arraySize = 0;
-		type = GetElementType(i, childStruct, arraySize);
-		StructHandle hStruct = NULL;
-		if (childStruct) {
-			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
-			childStruct->ConvertToDescription(*pStructDesc);
-			hStruct = (StructHandle)pStructDesc;
-		}
-
-		KSC_TypeInfo newElem = {type, arraySize, false, hStruct, NULL};
-		std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(i);
-		KSC_StructDesc::MemberInfo memberInfo;
-		memberInfo.idx = i;
-		memberInfo.mem_offset = curMemOffset;
-		memberInfo.type_string = it->second->GetTypeString().ToStdString();
-
-		if (type == VarType::kStructure)
-			memberInfo.mem_size = childStruct->GetStructSize();
-		else
-			memberInfo.mem_size = TypeSize(type);
-
-		ref.mMemberIndices[it->second->GetVarName().ToStdString()] = memberInfo;
-		newElem.typeString = memberInfo.type_string.c_str();
-		ref.push_back(newElem);
-
-		curMemOffset += memberInfo.mem_size;
-	}
-
-	ref.mStructSize = curMemOffset;
-}
 
 void CompilingContext::AddErrorMessage(const Token& token, const std::string& str)
 {

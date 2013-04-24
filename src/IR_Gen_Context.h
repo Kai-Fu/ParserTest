@@ -48,11 +48,17 @@ public:
 	static llvm::Module *TheModule;
 	static llvm::ExecutionEngine* TheExecutionEngine;
 	static llvm::FunctionPassManager* TheFPM;
+	static llvm::DataLayout* TheDataLayout;
 	static llvm::IRBuilder<> sBuilder;
 	static std::hash_map<std::string, void*> sGlobalFuncSymbols;
 
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
+	static int GetSizeOfLLVMType(VarType tp);
+	static llvm::Type* ConvertToPackedType(llvm::Type* srcType);
+	static void ConvertValueToPacked(llvm::Value* srcValue, llvm::Value* destPtr);
+	static llvm::Value* ConvertValueFromPacked(llvm::Value* srcValue, llvm::Type* destType);
+	static llvm::Function* CreateFunctionWithPackedArguments(llvm::Function* srcFunc);
 
 	CG_Context();
 	llvm::Function* GetCurrentFunc();

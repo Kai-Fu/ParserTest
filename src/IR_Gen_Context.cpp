@@ -6,6 +6,7 @@ llvm::IRBuilder<> CG_Context::sBuilder(getGlobalContext());
 llvm::Module* CG_Context::TheModule = NULL;
 llvm::ExecutionEngine* CG_Context::TheExecutionEngine = NULL;
 llvm::FunctionPassManager* CG_Context::TheFPM = NULL;
+llvm::DataLayout* CG_Context::TheDataLayout = NULL;
 std::hash_map<std::string, void*> CG_Context::sGlobalFuncSymbols;
 
 bool InitializeCodeGen()
@@ -23,7 +24,8 @@ bool InitializeCodeGen()
 
 	// Set up the optimizer pipeline.  Start with registering info about how the
 	// target lays out data structures.
-	CG_Context::TheFPM->add(new DataLayout(*CG_Context::TheExecutionEngine->getDataLayout()));
+	CG_Context::TheDataLayout = new DataLayout(*CG_Context::TheExecutionEngine->getDataLayout());
+	CG_Context::TheFPM->add(CG_Context::TheDataLayout);
 	// Provide basic AliasAnalysis support for GVN.
 	CG_Context::TheFPM->add(createBasicAliasAnalysisPass());
 	// Promote allocas to registers.
@@ -123,6 +125,236 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 	return NULL;
 }
 
+int CG_Context::GetSizeOfLLVMType(VarType tp)
+{
+	llvm::Type* type = ConvertToLLVMType(tp);
+	return (int)TheDataLayout->getTypeStoreSize(type);
+}
+
+llvm::Type* CG_Context::ConvertToPackedType(llvm::Type* srcType)
+{
+	llvm::Type* srcActualType = srcType;
+	if (srcType->isPointerTy()) {
+		llvm::PointerType* srcPtrType = dyn_cast<llvm::PointerType>(srcType);
+		srcActualType = srcPtrType->getElementType();
+	}
+	llvm::Type* destType = NULL;
+
+	if (srcActualType->isVectorTy()) {
+		llvm::VectorType* vType = dyn_cast<llvm::VectorType>(srcActualType);
+		llvm::Type* elemType = vType->getElementType();
+		unsigned int elemCnt = vType->getNumElements();
+		destType = llvm::ArrayType::get(elemType, elemCnt);
+	}
+	else if (srcActualType->isStructTy()) {
+		llvm::StructType* structType = dyn_cast<llvm::StructType>(srcActualType);
+		std::vector<llvm::Type*> newTypes;
+		for (unsigned int i = 0; i < structType->getNumElements(); ++i) {
+			newTypes.push_back(ConvertToPackedType(structType->getElementType(i)));
+		}
+		destType = llvm::StructType::create(getGlobalContext(), newTypes);
+	}
+	else if (srcActualType->isArrayTy()) {
+		llvm::ArrayType* arrayType = dyn_cast<llvm::ArrayType>(srcActualType);
+		llvm::Type* newElemType = ConvertToPackedType(arrayType->getElementType());
+		destType = llvm::ArrayType::get(newElemType, arrayType->getNumElements());
+	}
+	else
+		destType = srcActualType;
+
+	if (srcType->isPointerTy()) {
+		return llvm::PointerType::get(destType, 0);
+	}
+	else
+		return destType;
+}
+
+void CG_Context::ConvertValueToPacked(llvm::Value* srcValue, llvm::Value* destPtr)
+{
+	llvm::Type* srcType = NULL;
+	llvm::Value* srcActualValue = NULL;
+	if (srcValue->getType()->isPointerTy()) {
+		llvm::PointerType* srcPtrType = dyn_cast<llvm::PointerType>(srcValue->getType());
+		srcType = srcPtrType->getElementType();
+		srcActualValue = sBuilder.CreateLoad(srcValue);
+	}
+	else {
+		srcType = srcValue->getType();
+		srcActualValue = srcValue;
+	}
+
+	llvm::Value* destValuePtr = destPtr;
+
+	if (srcType->isVectorTy()) {
+
+		llvm::VectorType* vType = dyn_cast<llvm::VectorType>(srcType);
+		for (unsigned int i = 0; i < vType->getNumElements(); ++i) {
+			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
+			llvm::Value* elemValue = sBuilder.CreateExtractElement(srcActualValue, idx);
+			std::vector<llvm::Value*> indices(2);
+			indices[1] = idx;
+			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			llvm::Value* elemPtr = sBuilder.CreateGEP(destValuePtr, indices);
+			sBuilder.CreateStore(elemValue, elemPtr);
+		}
+		
+	}
+	else if (srcType->isArrayTy() || srcType->isStructTy()) {
+
+		llvm::CompositeType* pCompType = dyn_cast<llvm::CompositeType>(srcType);
+		unsigned int Idx = 0;
+		while (1) {
+			if (!pCompType->indexValid(Idx))
+				break;
+
+			llvm::Value* destIdx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)Idx));
+			std::vector<llvm::Value*> indices(2);
+			indices[1] = destIdx;
+			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			llvm::Value* destElemPtr = sBuilder.CreateGEP(destValuePtr, indices);
+
+			std::vector<unsigned int> srcIdx(1);
+			srcIdx[0] = Idx;
+			llvm::Value* srcElemValue = sBuilder.CreateExtractValue(srcActualValue, srcIdx);
+
+			ConvertValueToPacked(srcElemValue, destElemPtr);
+
+			++Idx;
+		}
+
+	}
+	else {
+		sBuilder.CreateStore(srcActualValue, destValuePtr);
+	}
+}
+
+llvm::Value* CG_Context::ConvertValueFromPacked(llvm::Value* srcValue, llvm::Type* destType)
+{
+	llvm::Type* srcType = NULL;
+	llvm::Value* srcActualValue = NULL;
+	if (srcValue->getType()->isPointerTy()) {
+		llvm::PointerType* srcPtrType = dyn_cast<llvm::PointerType>(srcValue->getType());
+		srcType = srcPtrType->getElementType();
+		srcActualValue = sBuilder.CreateLoad(srcValue);
+	}
+	else {
+		srcType = srcValue->getType();
+		srcActualValue = srcValue;
+	}
+
+	llvm::Type* destActualType = destType;
+	if (destType->isPointerTy()) {
+		llvm::PointerType* destPtrType = dyn_cast<llvm::PointerType>(destType);
+		destActualType = destPtrType->getElementType();
+	}
+	llvm::Value* destValuePtr = sBuilder.CreateAlloca(destActualType);
+
+	if (destActualType->isVectorTy()) {
+
+		llvm::Value* newVecValue = llvm::UndefValue::get(destActualType);
+		llvm::VectorType* vType = dyn_cast<llvm::VectorType>(destActualType);
+		assert(vType);
+		assert(srcType->isArrayTy());
+		for (unsigned int i = 0; i < vType->getNumElements(); ++i) {
+			llvm::Value* idx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)i));
+			std::vector<llvm::Value*> indices(2);
+			indices[1] = idx;
+			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+
+			std::vector<unsigned int> srcIdx(1);
+			srcIdx[0] = i;
+			llvm::Value* elemValue = sBuilder.CreateExtractValue(srcActualValue, srcIdx);
+
+			newVecValue = sBuilder.CreateInsertElement(newVecValue, elemValue, idx);
+			
+		}
+		sBuilder.CreateStore(newVecValue, destValuePtr);
+	}
+	else if (destActualType->isStructTy() || destActualType->isArrayTy()) {
+
+		llvm::CompositeType* pCompType = dyn_cast<llvm::CompositeType>(destActualType);
+		unsigned int Idx = 0;
+		while (1) {
+			if (!pCompType->indexValid(Idx))
+				break;
+
+			llvm::Value* destIdx = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)Idx));
+			std::vector<llvm::Value*> indices(2);
+			indices[1] = destIdx;
+			indices[0] = Constant::getIntegerValue(SC_INT_TYPE, APInt(sizeof(Int)*8, (uint64_t)0));
+			llvm::Value* destElemPtr = sBuilder.CreateGEP(destValuePtr, indices);
+			llvm::PointerType* destElemPtrType = dyn_cast<llvm::PointerType>(destElemPtr->getType());
+
+			std::vector<unsigned int> srcIdx(1);
+			srcIdx[0] = Idx;
+			llvm::Value* srcElemValue = sBuilder.CreateExtractValue(srcActualValue, srcIdx);
+
+			llvm::Value* convertedSrcValue = ConvertValueFromPacked(srcElemValue, destElemPtrType->getElementType());
+			sBuilder.CreateStore(convertedSrcValue, destElemPtr);
+
+			++Idx;
+		}
+
+	}
+	else {
+		sBuilder.CreateStore(srcActualValue, destValuePtr);
+	}
+
+	if (srcValue->getType()->isPointerTy())
+		return destValuePtr;
+	else
+		return sBuilder.CreateLoad(destValuePtr);
+}
+
+llvm::Function* CG_Context::CreateFunctionWithPackedArguments(llvm::Function* srcFunc)
+{
+	llvm::Function* wrapperF = NULL;
+	std::vector<llvm::Type*> wrapperF_argTypes;
+	std::vector<llvm::Type*> orgArgTypes;
+	for (Function::arg_iterator AI = srcFunc->arg_begin(); AI != srcFunc->arg_end(); ++AI) {
+		llvm::Type* argType = AI->getType();
+		orgArgTypes.push_back(argType);
+		wrapperF_argTypes.push_back(SC::CG_Context::ConvertToPackedType(argType));
+		
+	}
+	FunctionType *FT = FunctionType::get(SC::CG_Context::ConvertToPackedType(srcFunc->getReturnType()), wrapperF_argTypes, false);
+	wrapperF = Function::Create(FT, Function::ExternalLinkage, srcFunc->getName() + "_packed", CG_Context::TheModule);
+
+	BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry_packed", wrapperF);
+	sBuilder.SetInsertPoint(BB);
+
+	std::vector<llvm::Value*> args;
+	int Idx = 0;
+	// Convert the non-packed arguments to packed ones
+	//
+	for (Function::arg_iterator AI = wrapperF->arg_begin(); AI != wrapperF->arg_end(); ++AI, ++Idx) {
+		args.push_back(ConvertValueFromPacked(AI, orgArgTypes[Idx]));
+	}
+	// Invoke the target function
+	//
+	llvm::Value* retValue = sBuilder.CreateCall(srcFunc, args);
+	// Convert back the packed arguments to non-packed ones(if they're passed-by-reference)
+	//
+	Idx = 0;
+	for (Function::arg_iterator wrapperAI = wrapperF->arg_begin(); wrapperAI != wrapperF->arg_end(); ++wrapperAI, ++Idx) {
+		if (wrapperAI->getType()->isPointerTy()) {
+			assert(args[Idx]->getType()->isPointerTy());
+			ConvertValueToPacked(sBuilder.CreateLoad(args[Idx]), wrapperAI);
+		}
+	}
+
+	if (!srcFunc->getReturnType()->isVoidTy()) {
+		llvm::Value* retValuePtr = sBuilder.CreateAlloca(wrapperF->getReturnType());
+		ConvertValueToPacked(retValue, retValuePtr);
+	
+		sBuilder.CreateRet(sBuilder.CreateLoad(retValuePtr));
+	}
+	else
+		sBuilder.CreateRetVoid();
+
+	return wrapperF;
+}
+
 llvm::Value* CG_Context::GetVariableValue(const std::string& name, bool includeParent)
 {
 	llvm::Value* ptr = GetVariablePtr(name, includeParent);
@@ -207,7 +439,7 @@ llvm::Type* CG_Context::NewStructType(const Exp_StructDef* pStructDef)
 	}
 	ArrayRef<Type*> typeArray(&elemTypes[0], elemCnt);
 
-	llvm::Type* ret = StructType::create(getGlobalContext(), typeArray);
+	llvm::Type* ret = StructType::create(getGlobalContext(), typeArray, pStructDef->GetStructureName().c_str());
 	mStructTypes[pStructDef] = ret;
 	return ret;
 }

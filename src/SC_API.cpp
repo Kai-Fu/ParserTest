@@ -117,9 +117,32 @@ void* KSC_GetFunctionPtr(const char* funcName, ModuleHandle hModule)
 
 	std::hash_map<std::string, llvm::Function*>::iterator it = pModule->mFunctions.find(funcName);
 	if (it != pModule->mFunctions.end()) {
-		
-		if (!llvm::verifyFunction(*it->second, llvm::PrintMessageAction))
-			return SC::CG_Context::TheExecutionEngine->getPointerToFunction(it->second);
+
+		llvm::Function* F = it->second;
+
+		llvm::Function* wrapperF = SC::CG_Context::CreateFunctionWithPackedArguments(F);
+
+		/*// The JIT-ed function should NOT have any optimized alignment, so here force it aligned to 1 byte.
+		std::vector<Attributes::AttrVal> attrEnumList;
+		attrEnumList.push_back(Attributes::Alignment);
+
+		std::vector<llvm::AttributeWithIndex> attrWithIdxList;
+		llvm::AttrBuilder attrBuilder;
+		attrBuilder = attrBuilder.addAlignmentAttr(1);
+		int argIdx = 0;
+		for (Function::arg_iterator AI = F->arg_begin(); AI != F->arg_end(); ++AI, ++argIdx) {
+			llvm::AttributeWithIndex attrWithIdx;
+			attrWithIdx.Attrs = llvm::Attributes::get(getGlobalContext(), attrBuilder);
+			attrWithIdx.Index = argIdx + 1;
+			attrWithIdxList.push_back(attrWithIdx);
+		}
+
+		llvm::AttrListPtr attrList = llvm::AttrListPtr::get(getGlobalContext(), attrWithIdxList);
+		F->setAttributes(attrList);*/
+		wrapperF->dump();
+
+		if (!llvm::verifyFunction(*wrapperF, llvm::PrintMessageAction))
+			return SC::CG_Context::TheExecutionEngine->getPointerToFunction(wrapperF);
 		else
 			return NULL;
 
