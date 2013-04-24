@@ -2190,8 +2190,8 @@ Exp_FunctionDecl* Exp_FunctionDecl::Parse(CompilingContext& context, CodeDomain*
 			return NULL;
 
 		argDesc.isByRef = false;
-		if (context.PeekNextToken(0).IsEqual("&")) {
-			context.GetNextToken();
+		if (context.PeekNextToken(0).IsEqual("&") || context.PeekNextToken(0).IsEqual("%")) {
+			argDesc.needJITPacked = context.GetNextToken().IsEqual("&");
 			argDesc.isByRef = true;
 		}
 		Token argT = context.GetNextToken();

@@ -52,8 +52,12 @@ class KSC_ModuleDesc
 {
 public:
 	~KSC_ModuleDesc();
-
-	std::hash_map<std::string, llvm::Function*> mFunctions;
+	struct FuncIRDesc
+	{
+		llvm::Function* F;
+		std::vector<int> needJITPacked;
+	};
+	std::hash_map<std::string, FuncIRDesc> mFunctions;
 	std::hash_map<std::string, KSC_StructDesc*> mGlobalStructures;
 	std::hash_map<std::string, KSC_FunctionDesc*> mFunctionDesc;
 

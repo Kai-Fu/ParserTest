@@ -384,6 +384,7 @@ namespace SC {
 		struct ArgDesc {
 			Exp_ValueEval::TypeInfo typeInfo;
 			bool isByRef;
+			bool needJITPacked;
 			Token token;
 			Token typeString;
 		};

@@ -58,7 +58,7 @@ public:
 	static llvm::Type* ConvertToPackedType(llvm::Type* srcType);
 	static void ConvertValueToPacked(llvm::Value* srcValue, llvm::Value* destPtr);
 	static llvm::Value* ConvertValueFromPacked(llvm::Value* srcValue, llvm::Type* destType);
-	static llvm::Function* CreateFunctionWithPackedArguments(llvm::Function* srcFunc);
+	static llvm::Function* CreateFunctionWithPackedArguments(const KSC_ModuleDesc::FuncIRDesc& fDesc);
 
 	CG_Context();
 	llvm::Function* GetCurrentFunc();

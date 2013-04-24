@@ -306,33 +306,34 @@ llvm::Value* CG_Context::ConvertValueFromPacked(llvm::Value* srcValue, llvm::Typ
 		return sBuilder.CreateLoad(destValuePtr);
 }
 
-llvm::Function* CG_Context::CreateFunctionWithPackedArguments(llvm::Function* srcFunc)
+llvm::Function* CG_Context::CreateFunctionWithPackedArguments(const KSC_ModuleDesc::FuncIRDesc& fDesc)
 {
 	llvm::Function* wrapperF = NULL;
 	std::vector<llvm::Type*> wrapperF_argTypes;
 	std::vector<llvm::Type*> orgArgTypes;
-	for (Function::arg_iterator AI = srcFunc->arg_begin(); AI != srcFunc->arg_end(); ++AI) {
+	int Idx = 0;
+	for (Function::arg_iterator AI = fDesc.F->arg_begin(); AI != fDesc.F->arg_end(); ++AI, ++Idx) {
 		llvm::Type* argType = AI->getType();
 		orgArgTypes.push_back(argType);
-		wrapperF_argTypes.push_back(SC::CG_Context::ConvertToPackedType(argType));
+		wrapperF_argTypes.push_back(fDesc.needJITPacked[Idx] ? SC::CG_Context::ConvertToPackedType(argType) : argType);
 		
 	}
-	FunctionType *FT = FunctionType::get(SC::CG_Context::ConvertToPackedType(srcFunc->getReturnType()), wrapperF_argTypes, false);
-	wrapperF = Function::Create(FT, Function::ExternalLinkage, srcFunc->getName() + "_packed", CG_Context::TheModule);
+	FunctionType *FT = FunctionType::get(SC::CG_Context::ConvertToPackedType(fDesc.F->getReturnType()), wrapperF_argTypes, false);
+	wrapperF = Function::Create(FT, Function::ExternalLinkage, fDesc.F->getName() + "_packed", CG_Context::TheModule);
 
 	BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry_packed", wrapperF);
 	sBuilder.SetInsertPoint(BB);
 
 	std::vector<llvm::Value*> args;
-	int Idx = 0;
 	// Convert the non-packed arguments to packed ones
 	//
+	Idx = 0;
 	for (Function::arg_iterator AI = wrapperF->arg_begin(); AI != wrapperF->arg_end(); ++AI, ++Idx) {
-		args.push_back(ConvertValueFromPacked(AI, orgArgTypes[Idx]));
+		args.push_back(fDesc.needJITPacked[Idx] ? ConvertValueFromPacked(AI, orgArgTypes[Idx]) : AI);
 	}
 	// Invoke the target function
 	//
-	llvm::Value* retValue = sBuilder.CreateCall(srcFunc, args);
+	llvm::Value* retValue = sBuilder.CreateCall(fDesc.F, args);
 	// Convert back the packed arguments to non-packed ones(if they're passed-by-reference)
 	//
 	Idx = 0;
@@ -343,7 +344,7 @@ llvm::Function* CG_Context::CreateFunctionWithPackedArguments(llvm::Function* sr
 		}
 	}
 
-	if (!srcFunc->getReturnType()->isVoidTy()) {
+	if (!fDesc.F->getReturnType()->isVoidTy()) {
 		llvm::Value* retValuePtr = sBuilder.CreateAlloca(wrapperF->getReturnType());
 		ConvertValueToPacked(retValue, retValuePtr);
 	
@@ -467,7 +468,11 @@ bool RootDomain::CompileToIR(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
-			mouduleDesc.mFunctions[pFuncDecl->GetFunctionName()] = funcValue;
+			KSC_ModuleDesc::FuncIRDesc f_desc;
+			f_desc.F = funcValue;
+			for (int ai = 0; ai < pFuncDecl->GetArgumentCnt(); ++ai)
+				f_desc.needJITPacked.push_back(pFuncDecl->GetArgumentDesc(ai)->needJITPacked ? 1 : 0);
+			mouduleDesc.mFunctions[pFuncDecl->GetFunctionName()] = f_desc;
 			KSC_FunctionDesc* pFuncDesc = new KSC_FunctionDesc;
 			pFuncDecl->ConvertToDescription(*pFuncDesc);
 			mouduleDesc.mFunctionDesc[pFuncDecl->GetFunctionName()] = pFuncDesc;
