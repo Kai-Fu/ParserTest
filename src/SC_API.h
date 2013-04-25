@@ -66,7 +66,27 @@ namespace SC {
 
 }
 
-// The type information retrieved KSC APIs.
+/** 
+	The type information retrieved KSC APIs.
+
+	If the "type" is a structure, then the hStruct member will be set to non-zero, 
+	which can be passed to APIs for other information.
+
+	The "sizeOfType" takes the alignment requirement into account, which is platform-dependent
+	as well as the "alignment".
+
+	The "typeString" can be used to distinguish the actual external types so the hosting C++
+	side can do actions based on it.
+
+	The "isRef" flag indicates whether the function argument is passed by reference. In hosting C++ side,
+	the passed-by-reference argument will be JIT-ed as pointer to the associated type. 
+
+	The "isKSCLayout" flag indicates whether this function argument is depending on KSC internal implementation
+	for different platforms. In hosting C++ side if this flag is set, passing the pointer of structure with the same declaration 
+	as in KSCL code will not be guaranteed to work, unless the type alignment and the padding between structure members are respected.
+	It is highly suggested to use the "KSC_AllocMemForType" API to allocate the KSC compatible memory layout of structure and use 
+	"KSC_GetStructMemberPtr" and "KSC_SetStructMemberData" APIs to retrieve and modify the member data of KSC structures.
+*/
 struct KSC_TypeInfo
 {
 	SC::VarType type;
@@ -117,22 +137,66 @@ extern "C" {
 	KSC_API ModuleHandle KSC_Compile(const char* sourceCode);
 
 	/**
-		This funtion is to JIT the function with the name specified.
+		This funtion is to JIT the function with the function handle specified.
 	*/
 	KSC_API void* KSC_GetFunctionPtr(FunctionHandle hFunc);
 
+	/**
+		This function returns the function handle with the specified name. If the function with the name is not
+		found in the KSCL code, NULL will be returned.
+	*/
 	KSC_API FunctionHandle KSC_GetFunctionHandleByName(const char* funcName, ModuleHandle hModule);
+
+	/**
+		This function returns the function argument count.
+	*/
 	KSC_API int KSC_GetFunctionArgumentCount(FunctionHandle hFunc);
+
+	/**
+		This function returns the argument type info with the argument index specifed. 
+		Note the caller must ensure the "argIdx" in range otherwise unexpected result will occur.
+	*/
 	KSC_API KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx);
 
+	/**
+		This function returns the structure handle with the name specifed.
+	*/
 	KSC_API StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hModule);
+
+	/**
+		This function returns the structure member type info with the member name specified. If the member
+		itself is another structure type, the "hStruct" in the return type info will be set to non-zero. 
+		The hosting C++ code can recursively retrieve the member information of the nested structure.
+	*/
 	KSC_API KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, const char* member);
+
+	/**
+		This function allocates the memory regarding the type's alignment requirement.
+	*/
+	KSC_API void* KSC_AllocMemForType(const KSC_TypeInfo& typeInfo, int arraySize);
+	/**
+		This function frees the member allocated by "KSC_AllocMemForType".
+	*/
+	KSC_API void KSC_FreeMem(void* pData);
+
+	/**
+		This function returns the pointer to member variables by calculating the internal memory offset based on 
+		the pointer to the structure data.
+	*/
 	KSC_API void* KSC_GetStructMemberPtr(StructHandle hStruct, void* pStructVar, const char* member);
+
+	/**
+		This function modifies the member variable with the content pointed by "data".
+		Note the caller must ensure the provided buffer is large enough for the type of the member variable.
+	*/
 	KSC_API bool KSC_SetStructMemberData(StructHandle hStruct, void* pStructVar, const char* member, void* data);
+
+	/**
+		This function returns the KSC structure size(not the one of the same declaration in your host C++ code).
+	*/
 	KSC_API int KSC_GetStructSize(StructHandle hStruct);
 
-	KSC_API void* KSC_AllocMemForType(const KSC_TypeInfo& typeInfo, int arraySize);
-	KSC_API void KSC_FreeMem(void* pData);
+
 
 
 }
