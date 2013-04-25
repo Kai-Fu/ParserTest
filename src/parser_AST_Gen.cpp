@@ -2125,24 +2125,6 @@ bool Exp_FunctionDecl::HasBody() const
 	return mHasBody;
 }
 
-void Exp_FunctionDecl::ConvertToDescription(KSC_FunctionDesc& desc)
-{
-	desc.mArgTypeStrings.resize(mArgments.size());
-	desc.mArgumentTypes.resize(mArgments.size());
-
-	for (int i = 0; i < (int)mArgments.size(); ++i) {
-		
-		KSC_TypeInfo kscType = {mArgments[i].typeInfo.type, mArgments[i].typeInfo.arraySize, mArgments[i].isByRef, NULL};
-		if (mArgments[i].typeInfo.type == VarType::kStructure) {
-			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
-			mArgments[i].typeInfo.pStructDef->ConvertToDescription(*pStructDesc);
-			kscType.hStruct = pStructDesc;
-		}
-		desc.mArgTypeStrings[i] = mArgments[i].typeString.ToStdString();
-		kscType.typeString = desc.mArgTypeStrings.back().c_str();
-		desc.mArgumentTypes[i] = kscType;
-	}
-}
 
 Exp_FunctionDecl* CodeDomain::GetFunctionDeclByName(const std::string& funcName)
 {

@@ -51,7 +51,8 @@ int main(int argc, char* argv[])
 			float my_array[13];
 		};
 		ArrayCntr array_ref;
-		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))KSC_GetFunctionPtr("HandleArray", hModule);
+		FunctionHandle hFunc = KSC_GetFunctionHandleByName("HandleArray", hModule);
+		void (*HandleArray)(ArrayCntr* ref) = (void (*)(ArrayCntr* ref))KSC_GetFunctionPtr(hFunc);
 		HandleArray(&array_ref);
 	}
 	

@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "SC_API.h"
 #include <string.h>
-
+#include <assert.h>
 
 struct TestStructure
 {
@@ -45,17 +45,29 @@ int main(int argc, char* argv[])
 			return -1;
 		}
 
-		typedef int (*PFN_RW_Structure)(TestStructure* arg, TestStructure* arg1);
-		TestStructure tempStruct1;
-		tempStruct1.var0[0] = 7.0f;
-		tempStruct1.var0[1] = 8.0f;
-		tempStruct1.var0[2] = 9.0f;
-		tempStruct1.var0[3] = 10.0f;
-		tempStruct1.var1[0] = 6;
-		tempStruct1.var1[1] = 7;
+		typedef int (*PFN_RW_Structure)(TestStructure* arg, void* arg1);
+		
 		TestStructure tempStruct;
-		PFN_RW_Structure RW_Structure = (PFN_RW_Structure)KSC_GetFunctionPtr("PFN_RW_Structure", hModule);
-		int ret = RW_Structure(&tempStruct, &tempStruct1);
+		FunctionHandle hFunc = KSC_GetFunctionHandleByName("PFN_RW_Structure", hModule);
+		assert(KSC_GetFunctionArgumentCount(hFunc) == 2);
+
+		// The the type info of the second argument
+		KSC_TypeInfo typeInfo = KSC_GetFunctionArgumentType(hFunc, 1);
+		printf("Argument(1) type stirng is %s, size is %d.\n", typeInfo.typeString, KSC_GetStructSize(typeInfo.hStruct));
+		assert(KSC_GetStructHandleByName(typeInfo.typeString, hModule));
+
+		void* tempStruct1 = KSC_AllocMemForType(typeInfo, 1);
+		float* pVar0 = (float*)KSC_GetStructMemberPtr(typeInfo.hStruct, tempStruct1, "var0");
+		int* pVar1 = (int*)KSC_GetStructMemberPtr(typeInfo.hStruct, tempStruct1, "var1");
+		pVar0[0] = 7.0f;
+		pVar0[1] = 8.0f;
+		pVar0[2] = 9.0f;
+		pVar0[3] = 10.0f;
+		pVar1[0] = 6;
+		pVar1[1] = 7;
+
+		PFN_RW_Structure RW_Structure = (PFN_RW_Structure)KSC_GetFunctionPtr(hFunc);
+		int ret = RW_Structure(&tempStruct, tempStruct1);
 		printf("Test finished!\n");
 	}
 	

@@ -44,7 +44,8 @@ public:
 
 	std::vector<KSC_TypeInfo> mArgumentTypes;
 	std::vector<std::string> mArgTypeStrings;
-	KSC_TypeInfo mReturnType;
+	llvm::Function* F;
+	std::vector<int> needJITPacked;
 
 };
 
@@ -52,12 +53,7 @@ class KSC_ModuleDesc
 {
 public:
 	~KSC_ModuleDesc();
-	struct FuncIRDesc
-	{
-		llvm::Function* F;
-		std::vector<int> needJITPacked;
-	};
-	std::hash_map<std::string, FuncIRDesc> mFunctions;
+
 	std::hash_map<std::string, KSC_StructDesc*> mGlobalStructures;
 	std::hash_map<std::string, KSC_FunctionDesc*> mFunctionDesc;
 

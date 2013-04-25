@@ -570,10 +570,13 @@ int Exp_StructDef::GetStructSize() const
 	return totalSize;
 }
 
-void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
+void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref, CG_Context& ctx) const
 {
 	ref.clear();
 	ref.mMemberIndices.clear();
+	llvm::Type* structType = ctx.GetStructType(this);
+	ref.mStructSize = CG_Context::TheDataLayout->getTypeAllocSize(structType);
+	int structAlignment = CG_Context::TheDataLayout->getPrefTypeAlignment(structType);
 
 	const Exp_StructDef* childStruct;
 	int arraySize;
@@ -584,23 +587,27 @@ void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 		arraySize = 0;
 		type = GetElementType(i, childStruct, arraySize);
 		StructHandle hStruct = NULL;
+		int typeSize = 0;
+		int typeAlignment = 0;
 		if (childStruct) {
 			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
-			childStruct->ConvertToDescription(*pStructDesc);
+			childStruct->ConvertToDescription(*pStructDesc, ctx);
 			hStruct = (StructHandle)pStructDesc;
+			typeSize = pStructDesc->mStructSize;
+			typeAlignment = CG_Context::TheDataLayout->getPrefTypeAlignment(ctx.GetStructType(childStruct));
+		}
+		else {
+			typeSize = CG_Context::GetSizeOfLLVMType(type);
+			typeAlignment = CG_Context::GetAlignmentOfLLVMType(type);
 		}
 
-		KSC_TypeInfo newElem = {type, arraySize, false, hStruct, NULL};
+		KSC_TypeInfo newElem = {type, arraySize, typeSize, typeAlignment, hStruct, NULL, false};
 		std::hash_map<int, Exp_VarDef*>::const_iterator it = mIdx2ValueDefs.find(i);
 		KSC_StructDesc::MemberInfo memberInfo;
 		memberInfo.idx = i;
 		memberInfo.mem_offset = curMemOffset;
 		memberInfo.type_string = it->second->GetTypeString().ToStdString();
-
-		if (type == VarType::kStructure)
-			memberInfo.mem_size = childStruct->GetStructSize();
-		else
-			memberInfo.mem_size = CG_Context::GetSizeOfLLVMType(type);
+		memberInfo.mem_size = typeSize;
 
 		ref.mMemberIndices[it->second->GetVarName().ToStdString()] = memberInfo;
 		newElem.typeString = memberInfo.type_string.c_str();
@@ -608,8 +615,38 @@ void Exp_StructDef::ConvertToDescription(KSC_StructDesc& ref) const
 
 		curMemOffset += memberInfo.mem_size;
 	}
+}
 
-	ref.mStructSize = curMemOffset;
+void Exp_FunctionDecl::ConvertToDescription(KSC_FunctionDesc& desc, CG_Context& ctx)
+{
+	desc.mArgTypeStrings.resize(mArgments.size());
+	desc.mArgumentTypes.resize(mArgments.size());
+
+	// Handle the arguments
+	for (int i = 0; i < (int)mArgments.size(); ++i) {
+		
+		KSC_TypeInfo kscType = {mArgments[i].typeInfo.type, mArgments[i].typeInfo.arraySize, 0, 0, NULL, NULL, mArgments[i].isByRef};
+		int typeSize = 0;
+		int typeAlignment = 0;
+		if (mArgments[i].typeInfo.type == VarType::kStructure) {
+			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
+			mArgments[i].typeInfo.pStructDef->ConvertToDescription(*pStructDesc, ctx);
+			kscType.hStruct = pStructDesc;
+			typeSize = pStructDesc->mStructSize;
+			typeAlignment = CG_Context::TheDataLayout->getPrefTypeAlignment(ctx.GetStructType(mArgments[i].typeInfo.pStructDef));
+		}
+		else {
+			typeSize = CG_Context::GetSizeOfLLVMType(mArgments[i].typeInfo.type);
+			typeAlignment = CG_Context::GetAlignmentOfLLVMType(mArgments[i].typeInfo.type);
+		}
+		desc.mArgTypeStrings[i] = mArgments[i].typeString.ToStdString();
+		kscType.typeString = desc.mArgTypeStrings.back().c_str();
+		kscType.sizeOfType = typeSize;
+		kscType.alignment = typeAlignment;
+		kscType.isRef = mArgments[i].isByRef;
+		kscType.isKSCLayout = !mArgments[i].needJITPacked;
+		desc.mArgumentTypes[i] = kscType;
+	}
 }
 
 } // namespace SC

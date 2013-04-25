@@ -6,7 +6,7 @@ struct TestStructure
 	int2 var1; // int2
 };
 
-int PFN_RW_Structure(TestStructure& arg, TestStructure& arg1) 
+int PFN_RW_Structure(TestStructure& arg, TestStructure% arg1) 
 {
 	arg.var0 = float4(0.1, 0.2, 0.3, 0.4);
 	arg.var1 = int2(5,6);

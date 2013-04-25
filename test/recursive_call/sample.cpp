@@ -45,7 +45,8 @@ int main(int argc, char* argv[])
 		}
 
 		typedef int (*PFN_factorial)(int arg);
-		PFN_factorial factorial = (PFN_factorial)KSC_GetFunctionPtr("factorial", hModule);
+		FunctionHandle hFunc = KSC_GetFunctionHandleByName("factorial", hModule);
+		PFN_factorial factorial = (PFN_factorial)KSC_GetFunctionPtr(hFunc);
 		int result = factorial(9);
 		printf("result is %d\n", result);
 	}

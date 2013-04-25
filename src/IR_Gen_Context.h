@@ -55,10 +55,11 @@ public:
 public:
 	static llvm::Type* ConvertToLLVMType(VarType tp);
 	static int GetSizeOfLLVMType(VarType tp);
+	static int GetAlignmentOfLLVMType(VarType tp);
 	static llvm::Type* ConvertToPackedType(llvm::Type* srcType);
 	static void ConvertValueToPacked(llvm::Value* srcValue, llvm::Value* destPtr);
 	static llvm::Value* ConvertValueFromPacked(llvm::Value* srcValue, llvm::Type* destType);
-	static llvm::Function* CreateFunctionWithPackedArguments(const KSC_ModuleDesc::FuncIRDesc& fDesc);
+	static llvm::Function* CreateFunctionWithPackedArguments(const KSC_FunctionDesc& fDesc);
 
 	CG_Context();
 	llvm::Function* GetCurrentFunc();

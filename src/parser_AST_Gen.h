@@ -12,6 +12,7 @@
 namespace llvm {
 	class Value;
 	class Function;
+	class Type;
 }
 
 namespace SC {
@@ -213,7 +214,7 @@ namespace SC {
 		VarType GetElementType(int idx, const Exp_StructDef* &outStructDef, int& arraySize) const;
 		int GetElementIdxByName(const std::string& name) const;
 
-		void ConvertToDescription(KSC_StructDesc& ref) const;
+		void ConvertToDescription(KSC_StructDesc& ref, CG_Context& ctx) const;
 
 		static Exp_StructDef* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};
@@ -407,7 +408,7 @@ namespace SC {
 		ArgDesc* GetArgumentDesc(int idx);
 		bool HasSamePrototype(const Exp_FunctionDecl& ref) const;
 		bool HasBody() const;
-		void ConvertToDescription(KSC_FunctionDesc& desc);
+		void ConvertToDescription(KSC_FunctionDesc& desc, CG_Context& ctx);
 
 		static Exp_FunctionDecl* Parse(CompilingContext& context, CodeDomain* curDomain);
 	};

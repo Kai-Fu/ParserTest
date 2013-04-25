@@ -71,9 +71,12 @@ struct KSC_TypeInfo
 {
 	SC::VarType type;
 	int arraySize;
-	bool isRef;
+	int sizeOfType;
+	int alignment;
 	StructHandle hStruct;
 	const char* typeString;
+	bool isRef;
+	bool isKSCLayout;
 };
 
 extern "C" {
@@ -116,18 +119,20 @@ extern "C" {
 	/**
 		This funtion is to JIT the function with the name specified.
 	*/
-	KSC_API void* KSC_GetFunctionPtr(const char* funcName, ModuleHandle hModule);
+	KSC_API void* KSC_GetFunctionPtr(FunctionHandle hFunc);
 
 	KSC_API FunctionHandle KSC_GetFunctionHandleByName(const char* funcName, ModuleHandle hModule);
 	KSC_API int KSC_GetFunctionArgumentCount(FunctionHandle hFunc);
 	KSC_API KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx);
-	KSC_API KSC_TypeInfo KSC_GetFunctionReturnType(FunctionHandle hFunc);
 
 	KSC_API StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hModule);
 	KSC_API KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, const char* member);
 	KSC_API void* KSC_GetStructMemberPtr(StructHandle hStruct, void* pStructVar, const char* member);
 	KSC_API bool KSC_SetStructMemberData(StructHandle hStruct, void* pStructVar, const char* member, void* data);
 	KSC_API int KSC_GetStructSize(StructHandle hStruct);
+
+	KSC_API void* KSC_AllocMemForType(const KSC_TypeInfo& typeInfo, int arraySize);
+	KSC_API void KSC_FreeMem(void* pData);
 
 
 }

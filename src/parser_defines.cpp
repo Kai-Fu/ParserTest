@@ -228,7 +228,4 @@ KSC_FunctionDesc::~KSC_FunctionDesc()
 		if (mArgumentTypes[i].type == SC::VarType::kStructure)
 			delete (KSC_StructDesc*)mArgumentTypes[i].hStruct;
 	}
-
-	if (mReturnType.type == SC::VarType::kStructure)
-		delete (KSC_StructDesc*)mReturnType.hStruct;
 }

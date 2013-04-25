@@ -128,7 +128,15 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 int CG_Context::GetSizeOfLLVMType(VarType tp)
 {
 	llvm::Type* type = ConvertToLLVMType(tp);
-	return (int)TheDataLayout->getTypeStoreSize(type);
+	assert(type);
+	return (int)TheDataLayout->getTypeAllocSize(type);
+}
+
+int CG_Context::GetAlignmentOfLLVMType(VarType tp)
+{
+	llvm::Type* type = ConvertToLLVMType(tp);
+	assert(type);
+	return (int)TheDataLayout->getABITypeAlignment(type);
 }
 
 llvm::Type* CG_Context::ConvertToPackedType(llvm::Type* srcType)
@@ -306,7 +314,7 @@ llvm::Value* CG_Context::ConvertValueFromPacked(llvm::Value* srcValue, llvm::Typ
 		return sBuilder.CreateLoad(destValuePtr);
 }
 
-llvm::Function* CG_Context::CreateFunctionWithPackedArguments(const KSC_ModuleDesc::FuncIRDesc& fDesc)
+llvm::Function* CG_Context::CreateFunctionWithPackedArguments(const KSC_FunctionDesc& fDesc)
 {
 	llvm::Function* wrapperF = NULL;
 	std::vector<llvm::Type*> wrapperF_argTypes;
@@ -468,20 +476,18 @@ bool RootDomain::CompileToIR(CG_Context* pPredefine, KSC_ModuleDesc& mouduleDesc
 		Exp_FunctionDecl* pFuncDecl = dynamic_cast<Exp_FunctionDecl*>(mExpressions[i]);
 		if (pFuncDecl && pFuncDecl->HasBody()) {
 			llvm::Function* funcValue = llvm::dyn_cast_or_null<llvm::Function>(value);
-			KSC_ModuleDesc::FuncIRDesc f_desc;
-			f_desc.F = funcValue;
-			for (int ai = 0; ai < pFuncDecl->GetArgumentCnt(); ++ai)
-				f_desc.needJITPacked.push_back(pFuncDecl->GetArgumentDesc(ai)->needJITPacked ? 1 : 0);
-			mouduleDesc.mFunctions[pFuncDecl->GetFunctionName()] = f_desc;
 			KSC_FunctionDesc* pFuncDesc = new KSC_FunctionDesc;
-			pFuncDecl->ConvertToDescription(*pFuncDesc);
+			pFuncDesc->F = funcValue;
+			for (int ai = 0; ai < pFuncDecl->GetArgumentCnt(); ++ai)
+				pFuncDesc->needJITPacked.push_back(pFuncDecl->GetArgumentDesc(ai)->needJITPacked ? 1 : 0);
+			pFuncDecl->ConvertToDescription(*pFuncDesc, *cgCtx);
 			mouduleDesc.mFunctionDesc[pFuncDecl->GetFunctionName()] = pFuncDesc;
 		}
 
 		Exp_StructDef* pStructDef = dynamic_cast<Exp_StructDef*>(mExpressions[i]);
 		if (pStructDef) {
 			KSC_StructDesc* pStructDesc = new KSC_StructDesc;
-			pStructDef->ConvertToDescription(*pStructDesc);
+			pStructDef->ConvertToDescription(*pStructDesc, *cgCtx);
 			mouduleDesc.mGlobalStructures[pStructDef->GetStructureName()] = pStructDesc;
 		}
 	}

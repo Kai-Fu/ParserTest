@@ -56,7 +56,8 @@ int main(int argc, char* argv[])
 			}
 
 			typedef int (*PFN_run_test)();
-			PFN_run_test run_test = (PFN_run_test)KSC_GetFunctionPtr("run_test", hModule);
+			FunctionHandle hFunc = KSC_GetFunctionHandleByName("run_test", hModule);
+			PFN_run_test run_test = (PFN_run_test)KSC_GetFunctionPtr(hFunc);
 			
 			printf("Test %.2d:", test_cast_idx);
 			run_test();

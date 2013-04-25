@@ -3,6 +3,8 @@
 #include "parser_AST_Gen.h"
 #include <string>
 #include <list>
+#include <stdio.h>
+
 
 static std::string			s_lastErrMsg;
 SC::RootDomain*				s_predefineDomain = NULL;
@@ -109,42 +111,35 @@ ModuleHandle KSC_Compile(const char* sourceCode)
 	return ret;
 }
 
-void* KSC_GetFunctionPtr(const char* funcName, ModuleHandle hModule)
+void* KSC_GetFunctionPtr(FunctionHandle hFunc)
 {
-	KSC_ModuleDesc* pModule = (KSC_ModuleDesc*)hModule;
-	if (!pModule)
+	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
+	if (!pFuncDesc || !pFuncDesc->F)
 		return NULL;
 
-	std::hash_map<std::string, KSC_ModuleDesc::FuncIRDesc>::iterator it = pModule->mFunctions.find(funcName);
-	if (it != pModule->mFunctions.end()) {
+	llvm::Function* wrapperF = SC::CG_Context::CreateFunctionWithPackedArguments(*pFuncDesc);
 
-		llvm::Function* wrapperF = SC::CG_Context::CreateFunctionWithPackedArguments(it->second);
+	// The JIT-ed function should NOT have any optimized alignment, so here force it aligned to 1 byte.
+	std::vector<Attributes::AttrVal> attrEnumList;
+	attrEnumList.push_back(Attributes::Alignment);
 
-		// The JIT-ed function should NOT have any optimized alignment, so here force it aligned to 1 byte.
-		std::vector<Attributes::AttrVal> attrEnumList;
-		attrEnumList.push_back(Attributes::Alignment);
-
-		std::vector<llvm::AttributeWithIndex> attrWithIdxList;
-		llvm::AttrBuilder attrBuilder;
-		attrBuilder = attrBuilder.addAlignmentAttr(1);
-		int argIdx = 0;
-		for (Function::arg_iterator AI = wrapperF->arg_begin(); AI != wrapperF->arg_end(); ++AI, ++argIdx) {
-			llvm::AttributeWithIndex attrWithIdx;
-			attrWithIdx.Attrs = llvm::Attributes::get(getGlobalContext(), attrBuilder);
-			attrWithIdx.Index = argIdx + 1;
-			attrWithIdxList.push_back(attrWithIdx);
-		}
-
-		llvm::AttrListPtr attrList = llvm::AttrListPtr::get(getGlobalContext(), attrWithIdxList);
-		wrapperF->setAttributes(attrList);
-		wrapperF->dump();
-
-		if (!llvm::verifyFunction(*wrapperF, llvm::PrintMessageAction))
-			return SC::CG_Context::TheExecutionEngine->getPointerToFunction(wrapperF);
-		else
-			return NULL;
-
+	std::vector<llvm::AttributeWithIndex> attrWithIdxList;
+	llvm::AttrBuilder attrBuilder;
+	attrBuilder = attrBuilder.addAlignmentAttr(1);
+	int argIdx = 0;
+	for (Function::arg_iterator AI = wrapperF->arg_begin(); AI != wrapperF->arg_end(); ++AI, ++argIdx) {
+		llvm::AttributeWithIndex attrWithIdx;
+		attrWithIdx.Attrs = llvm::Attributes::get(getGlobalContext(), attrBuilder);
+		attrWithIdx.Index = argIdx + 1;
+		attrWithIdxList.push_back(attrWithIdx);
 	}
+
+	llvm::AttrListPtr attrList = llvm::AttrListPtr::get(getGlobalContext(), attrWithIdxList);
+	wrapperF->setAttributes(attrList);
+	wrapperF->dump();
+
+	if (!llvm::verifyFunction(*wrapperF, llvm::PrintMessageAction))
+		return SC::CG_Context::TheExecutionEngine->getPointerToFunction(wrapperF);
 	else
 		return NULL;
 }
@@ -173,7 +168,7 @@ int KSC_GetFunctionArgumentCount(FunctionHandle hFunc)
 
 KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx)
 {
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, 0, 0, NULL, NULL, false, false};
 	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
 	if (!pFuncDesc)
 		return ret;
@@ -181,14 +176,6 @@ KSC_TypeInfo KSC_GetFunctionArgumentType(FunctionHandle hFunc, int argIdx)
 	return pFuncDesc->mArgumentTypes[argIdx];
 }
 
-KSC_TypeInfo KSC_GetFunctionReturnType(FunctionHandle hFunc)
-{
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
-	KSC_FunctionDesc* pFuncDesc = (KSC_FunctionDesc*)hFunc;
-	if (!pFuncDesc)
-		return ret;
-	return pFuncDesc->mReturnType;
-}
 
 StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hModule)
 {
@@ -204,7 +191,7 @@ StructHandle KSC_GetStructHandleByName(const char* structName, ModuleHandle hMod
 
 KSC_TypeInfo KSC_GetStructMemberType(StructHandle hStruct, const char* member)
 {
-	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, false, NULL, NULL};
+	KSC_TypeInfo ret = {SC::VarType::kInvalid, 0, 0, 0, NULL, NULL, false, false};
 	KSC_StructDesc* pStructDesc = (KSC_StructDesc*)hStruct;
 	if (!pStructDesc)
 		return ret;
@@ -256,4 +243,33 @@ int KSC_GetStructSize(StructHandle hStruct)
 	if (!pStructDesc)
 		return 0;
 	return pStructDesc->mStructSize;
+}
+
+void* _Aligned_Malloc(size_t size, size_t align)
+{
+#ifdef __GNUC__
+	return posix_memalign(NULL, align, size);
+#else
+	return _aligned_malloc(size, align);
+#endif
+}
+
+void _Aligned_Free(void* ptr)
+{
+#ifdef __GNUC__
+	return free(ptr);
+#else
+	return _aligned_free(ptr);
+#endif
+
+}
+
+void* KSC_AllocMemForType(const KSC_TypeInfo& typeInfo, int arraySize)
+{
+	return _Aligned_Malloc(typeInfo.sizeOfType * arraySize, typeInfo.alignment);
+}
+
+void KSC_FreeMem(void* pData)
+{
+	_Aligned_Free(pData);
 }
