@@ -10,10 +10,13 @@ bool IsBuiltInType(VarType type)
 	case kFloat2:
 	case kFloat3:
 	case kFloat4:
+	case kFloat8:
 	case kInt:
 	case kInt2:
 	case kInt3:
 	case kInt4:
+	case kInt8:
+	case kBoolean:
 		return true;
 	}
 	return false;
@@ -26,6 +29,7 @@ bool IsFloatType(VarType type)
 	case kFloat2:
 	case kFloat3:
 	case kFloat4:
+	case kFloat8:
 		return true;
 	}
 	return false;
@@ -38,11 +42,13 @@ bool IsIntegerType(VarType type)
 	case kFloat2:
 	case kFloat3:
 	case kFloat4:
+	case kFloat8:
 		return false;
 	case kInt:
 	case kInt2:
 	case kInt3:
 	case kInt4:
+	case kInt8:
 		return true;
 	}
 	return false;
@@ -55,11 +61,13 @@ bool IsValueType(VarType type)
 	case kFloat2:
 	case kFloat3:
 	case kFloat4:
+	case kFloat8:
 
 	case kInt:
 	case kInt2:
 	case kInt3:
 	case kInt4:
+	case kInt8:
 	case kBoolean:
 		return true;
 	}
@@ -77,6 +85,8 @@ int TypeElementCnt(VarType type)
 		return 3;
 	case kFloat4:
 		return 4;
+	case kFloat8:
+		return 8;
 	case kInt:
 		return 1;
 	case kInt2:
@@ -85,6 +95,8 @@ int TypeElementCnt(VarType type)
 		return 3;
 	case kInt4:
 		return 4;
+	case kInt8:
+		return 8;
 	case kBoolean:
 		return 1;
 	case kVoid:
@@ -104,6 +116,8 @@ int TypeSize(VarType type)
 		return 3*sizeof(Float);
 	case kFloat4:
 		return 4*sizeof(Float);
+	case kFloat8:
+		return 8*sizeof(Float);
 	case kInt:
 		return 1*sizeof(Int);
 	case kInt2:
@@ -112,6 +126,8 @@ int TypeSize(VarType type)
 		return 3*sizeof(Int);
 	case kInt4:
 		return 4*sizeof(Int);
+	case kInt8:
+		return 8*sizeof(Int);
 	case kBoolean:
 		return sizeof(Int);
 	case kExternType:
@@ -180,11 +196,13 @@ bool IsTypeCompatible(VarType dest, VarType from, bool& FtoIwarning)
 	case kInt2:
 	case kInt3:
 	case kInt4:
+	case kInt8:
 		destIsI = true;
 	case kFloat:
 	case kFloat2:
 	case kFloat3:
 	case kFloat4:
+	case kFloat8:
 		ret = TypeElementCnt(dest) <= TypeElementCnt(from);
 	}
 

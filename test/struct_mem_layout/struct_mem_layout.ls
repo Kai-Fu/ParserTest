@@ -16,3 +16,7 @@ int PFN_RW_Structure(TestStructure& arg, TestStructure% arg1)
 	return 123;
 }
 
+void DotProductFloat8(float8% arg0, float8% arg1, float8% outArg) 
+{
+	outArg = arg0 * arg1;
+}

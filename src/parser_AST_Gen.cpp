@@ -25,11 +25,13 @@ void Initialize_AST_Gen()
 	s_BuiltInTypes["float2"] = TypeDesc(kFloat2, 2, false);
 	s_BuiltInTypes["float3"] = TypeDesc(kFloat3, 3, false);
 	s_BuiltInTypes["float4"] = TypeDesc(kFloat4, 4, false);
+	s_BuiltInTypes["float8"] = TypeDesc(kFloat8, 8, false);
 
 	s_BuiltInTypes["int"] = TypeDesc(kInt, 1, true);
 	s_BuiltInTypes["int2"] = TypeDesc(kInt2, 2, true);
 	s_BuiltInTypes["int3"] = TypeDesc(kInt3, 3, true);
 	s_BuiltInTypes["int4"] = TypeDesc(kInt4, 4, true);
+	s_BuiltInTypes["int8"] = TypeDesc(kInt8, 8, true);
 
 	s_BuiltInTypes["bool"] = TypeDesc(kBoolean, 4, true);
 	s_BuiltInTypes["void"] = TypeDesc(kVoid, 0, true);

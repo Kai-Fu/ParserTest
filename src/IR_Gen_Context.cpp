@@ -102,7 +102,8 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 		return VectorType::get(SC_FLOAT_TYPE, 3);
 	case VarType::kFloat4:
 		return VectorType::get(SC_FLOAT_TYPE, 4);
-		break;
+	case VarType::kFloat8:
+		return VectorType::get(SC_FLOAT_TYPE, 8);
 
 	case VarType::kInt:
 		return SC_INT_TYPE;
@@ -110,10 +111,10 @@ llvm::Type* CG_Context::ConvertToLLVMType(VarType tp)
 		return VectorType::get(SC_INT_TYPE, 2);
 	case VarType::kInt3:
 		return VectorType::get(SC_INT_TYPE, 3);
-		break;
 	case VarType::kInt4:
 		return VectorType::get(SC_INT_TYPE, 4);
-		break;
+	case VarType::kInt8:
+		return VectorType::get(SC_INT_TYPE, 8);
 	case VarType::kBoolean:
 		return SC_INT_TYPE; // Use integer to represent boolean value
 	case VarType::kExternType:
@@ -348,7 +349,8 @@ llvm::Function* CG_Context::CreateFunctionWithPackedArguments(const KSC_Function
 	for (Function::arg_iterator wrapperAI = wrapperF->arg_begin(); wrapperAI != wrapperF->arg_end(); ++wrapperAI, ++Idx) {
 		if (wrapperAI->getType()->isPointerTy()) {
 			assert(args[Idx]->getType()->isPointerTy());
-			ConvertValueToPacked(sBuilder.CreateLoad(args[Idx]), wrapperAI);
+			if (fDesc.needJITPacked[Idx])
+				ConvertValueToPacked(sBuilder.CreateLoad(args[Idx]), wrapperAI);
 		}
 	}
 

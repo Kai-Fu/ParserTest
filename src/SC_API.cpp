@@ -120,7 +120,7 @@ void* KSC_GetFunctionPtr(FunctionHandle hFunc)
 	llvm::Function* wrapperF = SC::CG_Context::CreateFunctionWithPackedArguments(*pFuncDesc);
 
 	// The JIT-ed function should NOT have any optimized alignment, so here force it aligned to 1 byte.
-	std::vector<Attributes::AttrVal> attrEnumList;
+	/*std::vector<Attributes::AttrVal> attrEnumList;
 	attrEnumList.push_back(Attributes::Alignment);
 
 	std::vector<llvm::AttributeWithIndex> attrWithIdxList;
@@ -135,7 +135,7 @@ void* KSC_GetFunctionPtr(FunctionHandle hFunc)
 	}
 
 	llvm::AttrListPtr attrList = llvm::AttrListPtr::get(getGlobalContext(), attrWithIdxList);
-	wrapperF->setAttributes(attrList);
+	wrapperF->setAttributes(attrList);*/
 	wrapperF->dump();
 
 	if (!llvm::verifyFunction(*wrapperF, llvm::PrintMessageAction))

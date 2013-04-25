@@ -68,7 +68,28 @@ int main(int argc, char* argv[])
 
 		PFN_RW_Structure RW_Structure = (PFN_RW_Structure)KSC_GetFunctionPtr(hFunc);
 		int ret = RW_Structure(&tempStruct, tempStruct1);
-		printf("Test finished!\n");
+		assert(ret == 123);
+
+		{
+			typedef int (*PFN_DotProductFloat8)(void* arg, void* arg1, void* outArg);
+			hFunc = KSC_GetFunctionHandleByName("DotProductFloat8", hModule);
+			typeInfo = KSC_GetFunctionArgumentType(hFunc, 0);
+			float* arg0 = (float*)KSC_AllocMemForType(typeInfo, 1);
+
+			typeInfo = KSC_GetFunctionArgumentType(hFunc, 1);
+			float* arg1 = (float*)KSC_AllocMemForType(typeInfo, 1);
+
+			typeInfo = KSC_GetFunctionArgumentType(hFunc, 2);
+			float* arg2 = (float*)KSC_AllocMemForType(typeInfo, 1);
+			for (int i = 0; i < 8; ++i) {
+				arg0[i] = 1.23f;
+				arg1[i] = 2.23f;
+			}
+
+			PFN_DotProductFloat8 DotProductFloat8 = (PFN_DotProductFloat8)KSC_GetFunctionPtr(hFunc);
+			DotProductFloat8(arg0, arg1, arg2);
+			printf("Test finished.\n");
+		}
 	}
 	
 
