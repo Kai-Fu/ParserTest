@@ -4,6 +4,7 @@
 #include <string>
 #include <list>
 #include <stdio.h>
+#include <llvm/Support/Host.h>
 
 
 static std::string			s_lastErrMsg;
@@ -21,6 +22,7 @@ bool KSC_Initialize(const char* sharedCode)
 	SC::Initialize_AST_Gen();
 	bool ret = SC::InitializeCodeGen();
 	
+	printf("KSC running on CPU %s.\n", llvm::sys::getHostCPUName().c_str());
 	if (ret) {
 		SC::CompilingContext preContext(NULL);
 		const char* intrinsicFuncDecal = 
